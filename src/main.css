@@ -1,0 +1,14 @@
+@import 'tailwindcss';
+@import '@fontsource/great-vibes';
+@import '@fontsource/cinzel';
+
+:root {
+  --font-cinzel: 'Cinzel', serif;
+  --font-great-vibes: 'Great Vibes', cursive;
+}
+
+body {
+  color: #471417;
+  font-family: var(--font-cinzel);
+  font-weight: 1000;
+}
