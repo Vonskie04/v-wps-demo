@@ -292,7 +292,7 @@ async function syncGalleryMedia() {
 }
 
 function handleManualRefresh() {
-  void syncGalleryMedia()
+  window.location.reload()
 }
 
 function handleWindowFocus() {
