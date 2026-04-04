@@ -69,23 +69,24 @@ export function useMediaStore() {
     return uploadedMedia.value.length
   }
 
-  async function addFiles(files: FileList | File[]) {
+  async function addFiles(
+    files: FileList | File[],
+    onProgress?: (current: number, total: number) => void,
+  ) {
     const cloudName = resolveCloudinaryCloudName()
 
     if (!cloudName || !CLOUDINARY_UPLOAD_PRESET) {
       throw new Error('Cloudinary environment variables are missing.')
     }
 
-    const fileArray = Array.from(files)
+    const fileArray = Array.from(files).filter(
+      (f) => f.type.startsWith('image/') || f.type.startsWith('video/'),
+    )
 
-    for (const file of fileArray) {
+    for (const [i, file] of fileArray.entries()) {
+      onProgress?.(i + 1, fileArray.length)
+
       const isImage = file.type.startsWith('image/')
-      const isVideo = file.type.startsWith('video/')
-
-      if (!isImage && !isVideo) {
-        continue
-      }
-
       const resourceType = isImage ? 'image' : 'video'
       const uploadUrl = `https://api.cloudinary.com/v1_1/${cloudName}/${resourceType}/upload`
 

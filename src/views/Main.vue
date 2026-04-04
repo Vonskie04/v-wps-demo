@@ -46,6 +46,31 @@
         @change="handleFileUpload"
       />
     </div>
+
+    <Teleport to="body">
+      <div
+        v-if="isUploading"
+        class="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
+      >
+        <div class="bg-white rounded-2xl p-6 w-full max-w-xs mx-4 text-center shadow-xl">
+          <p class="text-sm font-semibold tracking-wide">
+            {{
+              uploadProgress.total <= 1
+                ? 'Uploading your file...'
+                : `Uploading file ${uploadProgress.current} of ${uploadProgress.total}...`
+            }}
+          </p>
+          <div v-if="uploadProgress.total >= 2" class="mt-4 w-full bg-gray-200 rounded-full h-2">
+            <div
+              class="bg-indigo-500 h-2 rounded-full transition-all duration-300"
+              :style="{
+                width: `${uploadProgress.current > 0 ? ((uploadProgress.current - 1) / uploadProgress.total) * 100 : 0}%`,
+              }"
+            ></div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -58,6 +83,7 @@ const router = useRouter()
 const fileInput = ref<HTMLInputElement | null>(null)
 const isUploading = ref(false)
 const uploadError = ref('')
+const uploadProgress = ref({ current: 0, total: 0 })
 const { addFiles } = useMediaStore()
 
 const lockHistoryState = { mainLock: true }
@@ -92,10 +118,13 @@ async function handleFileUpload(event: Event) {
   }
 
   uploadError.value = ''
+  uploadProgress.value = { current: 0, total: target.files.length }
   isUploading.value = true
 
   try {
-    await addFiles(target.files)
+    await addFiles(target.files, (current, total) => {
+      uploadProgress.value = { current, total }
+    })
     router.push('/gallery')
   } catch {
     uploadError.value = 'Upload failed. Please try again.'

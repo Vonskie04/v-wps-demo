@@ -21,13 +21,13 @@
         <span class="hidden text-sm font-semibold tracking-wide sm:inline-block">BACK</span>
       </button>
 
-      <h1 class="mb-5 text-xl sm:text-3xl">THE GALLERY OF</h1>
+      <h1 class="mb-10 text-xl sm:text-3xl">THE GALLERY OF</h1>
       <h1 class="fg text-4xl sm:text-5xl lg:text-6xl">
         Victor <span class="fg text-4xl sm:text-5xl lg:text-6xl mx-2 sm:mx-5">&</span> Denise
       </h1>
     </div>
 
-    <div class="mt-8 flex items-center justify-center gap-10">
+    <div class="mt-8 relative flex items-center justify-center gap-10">
       <button
         @click="activeTab = 'photos'"
         class="cursor-pointer p-2 fc"
@@ -42,11 +42,52 @@
       >
         VIDEOS
       </button>
+
+      <!-- View toggle — mobile only -->
+      <button
+        @click="viewMode = viewMode === 'grid' ? 'list' : 'grid'"
+        class="absolute right-0 cursor-pointer rounded-md p-1.5 text-[#471417] transition-colors sm:hidden"
+        :aria-label="viewMode === 'grid' ? 'Switch to list view' : 'Switch to grid view'"
+      >
+        <!-- Grid icon — shown when in list mode (click to go to grid) -->
+        <svg
+          v-if="viewMode === 'list'"
+          xmlns="http://www.w3.org/2000/svg"
+          class="h-5 w-5"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          stroke-width="2"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"
+          />
+        </svg>
+        <!-- List icon — shown when in grid mode (click to go to list) -->
+        <svg
+          v-else
+          xmlns="http://www.w3.org/2000/svg"
+          class="h-5 w-5"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          stroke-width="2"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M4 6h16M4 10h16M4 14h16M4 18h16"
+          />
+        </svg>
+      </button>
     </div>
 
     <div
       v-if="currentItems.length > 0"
-      class="mt-8 mx-auto grid max-w-5xl grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"
+      class="mt-8 mx-auto grid max-w-5xl gap-4 sm:grid-cols-2 lg:grid-cols-3"
+      :class="viewMode === 'grid' ? 'grid-cols-2' : 'grid-cols-1'"
     >
       <button
         v-for="item in currentItems"
@@ -55,20 +96,41 @@
         @click="openPreview(item)"
         class="cursor-pointer overflow-hidden rounded-xl bg-gray-100 text-left shadow-sm transition-all duration-300 hover:shadow-md hover:brightness-80 active:brightness-60"
       >
-        <img
-          v-if="item.type === 'image'"
-          :src="item.src"
-          :alt="item.name"
-          class="h-56 w-full object-cover"
-        />
-        <video
-          v-else
-          :src="item.src"
-          muted
-          playsinline
-          class="pointer-events-none h-56 w-full object-cover"
-          preload="metadata"
-        />
+        <!-- Grid layout -->
+        <template v-if="viewMode === 'grid'">
+          <img
+            v-if="item.type === 'image'"
+            :src="item.src"
+            :alt="item.name"
+            class="h-40 w-full object-cover sm:h-56"
+          />
+          <video
+            v-else
+            :src="item.src"
+            muted
+            playsinline
+            class="pointer-events-none h-40 w-full object-cover sm:h-56"
+            preload="metadata"
+          />
+        </template>
+
+        <!-- List layout (mobile) -->
+        <template v-else>
+          <img
+            v-if="item.type === 'image'"
+            :src="item.src"
+            :alt="item.name"
+            class="h-40 w-full object-cover sm:h-56"
+          />
+          <video
+            v-else
+            :src="item.src"
+            muted
+            playsinline
+            class="pointer-events-none h-40 w-full object-cover sm:h-56"
+            preload="metadata"
+          />
+        </template>
       </button>
     </div>
 
@@ -159,6 +221,7 @@ import type { UploadedMedia } from '@/stores/mediaStore'
 
 const router = useRouter()
 const activeTab = ref<'photos' | 'videos'>('photos')
+const viewMode = ref<'grid' | 'list'>('grid')
 const { uploadedMedia, syncUploadedMediaWithCloudinary } = useMediaStore()
 const selectedMedia = ref<UploadedMedia | null>(null)
 const isSyncing = ref(false)
