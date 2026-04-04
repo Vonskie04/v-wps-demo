@@ -29,8 +29,6 @@ function resolveCloudinaryCloudName() {
   return CLOUDINARY_CLOUD_NAME
 }
 
-const uploadedMedia = ref<UploadedMedia[]>([])
-
 interface MediaListApiItem {
   id: string
   name: string
@@ -52,6 +50,30 @@ function isMediaListApiItem(item: unknown): item is MediaListApiItem {
   )
 }
 
+const STORAGE_KEY = 'v-wed-media'
+
+function loadFromStorage(): UploadedMedia[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw) as unknown
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter(isMediaListApiItem)
+  } catch {
+    return []
+  }
+}
+
+function saveToStorage(items: UploadedMedia[]): void {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(items))
+  } catch {
+    // localStorage may be unavailable (private mode, quota exceeded)
+  }
+}
+
+const uploadedMedia = ref<UploadedMedia[]>(loadFromStorage())
+
 export function useMediaStore() {
   async function syncUploadedMediaWithCloudinary() {
     const response = await fetch(MEDIA_LIST_ENDPOINT)
@@ -64,6 +86,7 @@ export function useMediaStore() {
     const mediaItems = Array.isArray(payload.media) ? payload.media : []
 
     uploadedMedia.value = mediaItems.filter(isMediaListApiItem)
+    saveToStorage(uploadedMedia.value)
 
     return uploadedMedia.value.length
   }
@@ -112,6 +135,7 @@ export function useMediaStore() {
         type: isImage ? 'image' : 'video',
         src: data.secure_url,
       })
+      saveToStorage(uploadedMedia.value)
     }
   }
 
