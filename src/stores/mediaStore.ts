@@ -84,9 +84,15 @@ export function useMediaStore() {
 
     const payload = (await response.json()) as { media?: unknown }
     const mediaItems = Array.isArray(payload.media) ? payload.media : []
+    const validItems = mediaItems.filter(isMediaListApiItem)
 
-    uploadedMedia.value = mediaItems.filter(isMediaListApiItem)
-    saveToStorage(uploadedMedia.value)
+    // Only replace state when the server returns at least one item.
+    // An empty result may indicate a temporary misconfiguration or a
+    // race condition right after upload, not that Cloudinary is empty.
+    if (validItems.length > 0) {
+      uploadedMedia.value = validItems
+      saveToStorage(uploadedMedia.value)
+    }
 
     return uploadedMedia.value.length
   }
