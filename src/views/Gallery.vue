@@ -162,6 +162,7 @@ const activeTab = ref<'photos' | 'videos'>('photos')
 const { uploadedMedia, syncUploadedMediaWithCloudinary } = useMediaStore()
 const selectedMedia = ref<UploadedMedia | null>(null)
 const isSyncing = ref(false)
+let pollInterval: ReturnType<typeof setInterval> | null = null
 
 const lockHistoryState = { galleryLock: true }
 
@@ -208,12 +209,17 @@ onMounted(async () => {
   window.addEventListener('focus', handleWindowFocus)
   document.addEventListener('visibilitychange', handleVisibilityChange)
   await syncGalleryMedia()
+  pollInterval = setInterval(() => void syncGalleryMedia(), 30_000)
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('popstate', handlePopState)
   window.removeEventListener('focus', handleWindowFocus)
   document.removeEventListener('visibilitychange', handleVisibilityChange)
+  if (pollInterval !== null) {
+    clearInterval(pollInterval)
+    pollInterval = null
+  }
 })
 
 function goToMain() {
