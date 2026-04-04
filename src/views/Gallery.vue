@@ -84,8 +84,20 @@
       </button>
     </div>
 
+    <!-- Skeleton loading grid -->
     <div
-      v-if="currentItems.length > 0"
+      v-if="isLoading"
+      class="mt-8 mx-auto grid max-w-5xl gap-4 grid-cols-2 sm:grid-cols-2 lg:grid-cols-3"
+    >
+      <div
+        v-for="n in 6"
+        :key="n"
+        class="skeleton-card overflow-hidden rounded-xl bg-gray-200 h-40 sm:h-56"
+      />
+    </div>
+
+    <div
+      v-else-if="currentItems.length > 0"
       class="mt-8 mx-auto grid max-w-5xl gap-4 sm:grid-cols-2 lg:grid-cols-3"
       :class="viewMode === 'grid' ? 'grid-cols-2' : 'grid-cols-1'"
     >
@@ -225,6 +237,7 @@ const viewMode = ref<'grid' | 'list'>('grid')
 const { uploadedMedia, syncUploadedMediaWithCloudinary } = useMediaStore()
 const selectedMedia = ref<UploadedMedia | null>(null)
 const isSyncing = ref(false)
+const isLoading = ref(true)
 let pollInterval: ReturnType<typeof setInterval> | null = null
 
 const lockHistoryState = { galleryLock: true }
@@ -272,6 +285,7 @@ onMounted(async () => {
   window.addEventListener('focus', handleWindowFocus)
   document.addEventListener('visibilitychange', handleVisibilityChange)
   await syncGalleryMedia()
+  isLoading.value = false
   pollInterval = setInterval(() => void syncGalleryMedia(), 30_000)
 })
 
@@ -332,5 +346,33 @@ const currentItems = computed(() => {
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+}
+
+.skeleton-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.skeleton-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.55) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
 }
 </style>

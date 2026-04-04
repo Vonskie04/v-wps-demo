@@ -37,6 +37,35 @@
 
       <p v-if="uploadError" class="mt-3 text-sm text-red-700">{{ uploadError }}</p>
 
+      <!-- Disclaimer Modal -->
+      <Teleport to="body">
+        <div
+          v-if="showDisclaimer"
+          class="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
+        >
+          <div class="bg-white rounded-2xl p-6 w-full max-w-xs mx-4 text-center shadow-xl">
+            <p class="text-sm font-semibold tracking-wide leading-relaxed">
+              Files cannot be deleted by guests once uploaded. Please make sure to select your
+              desired photos/videos.
+            </p>
+            <div class="mt-5 flex gap-3 justify-center">
+              <button
+                @click="showDisclaimer = false"
+                class="px-4 py-2 text-xs tracking-wide rounded-xl border border-gray-300 hover:bg-gray-100 transition cursor-pointer"
+              >
+                CANCEL
+              </button>
+              <button
+                @click="confirmUpload"
+                class="px-4 py-2 text-xs tracking-wide rounded-xl bg-[#471417] text-white hover:bg-[#5a1f2a] transition cursor-pointer"
+              >
+                CONTINUE
+              </button>
+            </div>
+          </div>
+        </div>
+      </Teleport>
+
       <input
         ref="fileInput"
         type="file"
@@ -86,6 +115,7 @@ const uploadError = ref('')
 const uploadProgress = ref({ current: 0, total: 0 })
 const { addFiles } = useMediaStore()
 
+const showDisclaimer = ref(false)
 const lockHistoryState = { mainLock: true }
 
 function lockBrowserNavigation() {
@@ -107,6 +137,11 @@ onBeforeUnmount(() => {
 })
 
 function openFilePicker() {
+  showDisclaimer.value = true
+}
+
+function confirmUpload() {
+  showDisclaimer.value = false
   fileInput.value?.click()
 }
 
