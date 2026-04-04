@@ -82,13 +82,40 @@
         class="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
       >
         <div class="bg-white rounded-2xl p-6 w-full max-w-xs mx-4 text-center shadow-xl">
-          <p class="text-sm font-semibold tracking-wide">
+          <p class="text-sm font-semibold tracking-wide mb-3">
             {{
               uploadProgress.total <= 1
                 ? 'Uploading your file...'
                 : `Uploading file ${uploadProgress.current} of ${uploadProgress.total}...`
             }}
           </p>
+          <ul class="text-left space-y-2 max-h-48 overflow-y-auto">
+            <li
+              v-for="(file, index) in uploadFileStatuses"
+              :key="index"
+              class="flex items-center justify-between gap-2 text-xs"
+            >
+              <span class="truncate max-w-[65%] text-gray-700">{{ file.name }}</span>
+              <span
+                :class="[
+                  'shrink-0 font-medium',
+                  file.status === 'uploading'
+                    ? 'text-indigo-500 animate-pulse'
+                    : file.status === 'done'
+                      ? 'text-green-500'
+                      : 'text-gray-400',
+                ]"
+              >
+                {{
+                  file.status === 'uploading'
+                    ? 'Uploading...'
+                    : file.status === 'done'
+                      ? 'Done'
+                      : 'Pending'
+                }}
+              </span>
+            </li>
+          </ul>
           <div v-if="uploadProgress.total >= 2" class="mt-4 w-full bg-gray-200 rounded-full h-2">
             <div
               class="bg-indigo-500 h-2 rounded-full transition-all duration-300"
@@ -114,6 +141,12 @@ const isUploading = ref(false)
 const uploadError = ref('')
 const uploadProgress = ref({ current: 0, total: 0 })
 const { addFiles } = useMediaStore()
+
+interface FileStatus {
+  name: string
+  status: 'pending' | 'uploading' | 'done'
+}
+const uploadFileStatuses = ref<FileStatus[]>([])
 
 const showDisclaimer = ref(false)
 const lockHistoryState = { mainLock: true }
@@ -154,12 +187,22 @@ async function handleFileUpload(event: Event) {
 
   uploadError.value = ''
   uploadProgress.value = { current: 0, total: target.files.length }
+  uploadFileStatuses.value = Array.from(target.files).map((f) => ({
+    name: f.name,
+    status: 'pending' as const,
+  }))
   isUploading.value = true
 
   try {
     await addFiles(target.files, (current, total) => {
       uploadProgress.value = { current, total }
+      const prev = uploadFileStatuses.value[current - 2]
+      if (prev) prev.status = 'done'
+      const cur = uploadFileStatuses.value[current - 1]
+      if (cur) cur.status = 'uploading'
     })
+    const last = uploadFileStatuses.value[uploadFileStatuses.value.length - 1]
+    if (last) last.status = 'done'
     router.push('/gallery')
   } catch {
     uploadError.value = 'Upload failed. Please try again.'

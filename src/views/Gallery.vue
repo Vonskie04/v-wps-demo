@@ -1,6 +1,19 @@
 <template>
   <div class="px-4 py-10">
     <div class="relative flex flex-col items-center justify-center text-center pt-12 sm:pt-0">
+      <!-- Sync status bar -->
+      <div class="absolute left-0 top-0 sm:top-2 flex items-center gap-2 h-8 px-1">
+        <template v-if="!isLoading && isSyncing">
+          <span class="inline-block h-2 w-2 animate-pulse rounded-full bg-green-400"></span>
+          <span class="text-xs text-gray-400 tracking-wide">Updating...</span>
+        </template>
+        <Transition name="fade">
+          <span v-if="newFilesAdded > 0" class="text-xs font-medium text-green-600 tracking-wide">
+            +{{ newFilesAdded }} new {{ newFilesAdded === 1 ? 'file' : 'files' }} added
+          </span>
+        </Transition>
+      </div>
+
       <!-- Back button -->
       <button
         type="button"
@@ -238,6 +251,8 @@ const { uploadedMedia, syncUploadedMediaWithCloudinary } = useMediaStore()
 const selectedMedia = ref<UploadedMedia | null>(null)
 const isSyncing = ref(false)
 const isLoading = ref(true)
+const newFilesAdded = ref(0)
+let newFilesTimer: ReturnType<typeof setTimeout> | null = null
 let pollInterval: ReturnType<typeof setInterval> | null = null
 
 const lockHistoryState = { galleryLock: true }
@@ -257,9 +272,20 @@ async function syncGalleryMedia() {
   }
 
   isSyncing.value = true
+  const prevCount = uploadedMedia.value.length
 
   try {
     await syncUploadedMediaWithCloudinary()
+    if (!isLoading.value) {
+      const added = uploadedMedia.value.length - prevCount
+      if (added > 0) {
+        newFilesAdded.value = added
+        if (newFilesTimer !== null) clearTimeout(newFilesTimer)
+        newFilesTimer = setTimeout(() => {
+          newFilesAdded.value = 0
+        }, 5000)
+      }
+    }
   } finally {
     isSyncing.value = false
   }
@@ -296,6 +322,10 @@ onBeforeUnmount(() => {
   if (pollInterval !== null) {
     clearInterval(pollInterval)
     pollInterval = null
+  }
+  if (newFilesTimer !== null) {
+    clearTimeout(newFilesTimer)
+    newFilesTimer = null
   }
 })
 
