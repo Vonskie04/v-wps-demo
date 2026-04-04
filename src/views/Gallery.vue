@@ -5,10 +5,10 @@
       <div class="absolute left-0 top-0 sm:top-2 flex items-center gap-2 h-8 px-1">
         <template v-if="!isLoading && isSyncing">
           <span class="inline-block h-2 w-2 animate-pulse rounded-full bg-green-400"></span>
-          <span class="text-xs text-gray-400 tracking-wide">Updating...</span>
+          <span class="sync-status text-xs text-gray-400">Updating...</span>
         </template>
         <Transition name="fade">
-          <span v-if="newFilesAdded > 0" class="text-xs font-medium text-green-600 tracking-wide">
+          <span v-if="newFilesAdded > 0" class="sync-status text-xs text-green-600">
             +{{ newFilesAdded }} new {{ newFilesAdded === 1 ? 'file' : 'files' }} added
           </span>
         </Transition>
@@ -366,6 +366,11 @@ const currentItems = computed(() => {
 .fg {
   font-family: var(--font-great-vibes);
   font-weight: 500;
+}
+
+.sync-status {
+  font-family: var(--font-saira-stencil);
+  letter-spacing: 0.04em;
 }
 
 .fade-enter-active,

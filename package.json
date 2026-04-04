@@ -22,6 +22,7 @@
   "dependencies": {
     "@fontsource/cinzel": "^5.2.8",
     "@fontsource/great-vibes": "^5.2.8",
+    "@fontsource/saira-stencil-one": "^5.2.8",
     "@tailwindcss/vite": "^4.1.16",
     "cloudinary": "^2.8.0",
     "dotenv": "^17.2.3",
