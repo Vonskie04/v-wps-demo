@@ -50,29 +50,7 @@ function isMediaListApiItem(item: unknown): item is MediaListApiItem {
   )
 }
 
-const STORAGE_KEY = 'v-wed-media'
-
-function loadFromStorage(): UploadedMedia[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return []
-    const parsed = JSON.parse(raw) as unknown
-    if (!Array.isArray(parsed)) return []
-    return parsed.filter(isMediaListApiItem)
-  } catch {
-    return []
-  }
-}
-
-function saveToStorage(items: UploadedMedia[]): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(items))
-  } catch {
-    // localStorage may be unavailable (private mode, quota exceeded)
-  }
-}
-
-const uploadedMedia = ref<UploadedMedia[]>(loadFromStorage())
+const uploadedMedia = ref<UploadedMedia[]>([])
 
 export function useMediaStore() {
   async function syncUploadedMediaWithCloudinary() {
@@ -87,7 +65,6 @@ export function useMediaStore() {
     const validItems = mediaItems.filter(isMediaListApiItem)
 
     uploadedMedia.value = validItems
-    saveToStorage(uploadedMedia.value)
 
     return uploadedMedia.value.length
   }
@@ -125,19 +102,10 @@ export function useMediaStore() {
         throw new Error(`Failed to upload ${file.name}.`)
       }
 
-      const data = (await response.json()) as {
-        public_id: string
-        secure_url: string
-      }
-
-      uploadedMedia.value.push({
-        id: data.public_id,
-        name: file.name,
-        type: isImage ? 'image' : 'video',
-        src: data.secure_url,
-      })
-      saveToStorage(uploadedMedia.value)
+      await response.json()
     }
+
+    await syncUploadedMediaWithCloudinary()
   }
 
   return {

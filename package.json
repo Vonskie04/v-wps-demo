@@ -11,6 +11,7 @@
     "dev:client": "vite",
     "dev:server": "node server/media-list-server.mjs",
     "server": "node server/media-list-server.mjs",
+    "start": "node server/media-list-server.mjs",
     "build": "run-p type-check \"build-only {@}\" --",
     "preview": "vite preview",
     "build-only": "vite build",

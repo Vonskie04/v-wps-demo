@@ -1,9 +1,29 @@
 import 'dotenv/config'
 import express from 'express'
+import { fileURLToPath } from 'url'
+import { dirname, join } from 'path'
+import { existsSync } from 'fs'
 import { v2 as cloudinary } from 'cloudinary'
 
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const distDir = join(__dirname, '../dist')
+
 const app = express()
-const serverPort = Number(process.env.MEDIA_LIST_PORT ?? 8787)
+
+// server/media-list-server.mjs
+const serverPort = Number(process.env.PORT ?? process.env.MEDIA_LIST_PORT ?? 8787)
+
+// Allow cross-origin requests from any device (needed for multi-device access)
+app.use((req, res, next) => {
+  res.set('Access-Control-Allow-Origin', '*')
+  res.set('Access-Control-Allow-Methods', 'GET, OPTIONS')
+  res.set('Access-Control-Allow-Headers', 'Content-Type')
+  if (req.method === 'OPTIONS') {
+    res.sendStatus(204)
+    return
+  }
+  next()
+})
 
 function resolveCloudinaryConfig() {
   const cloudinaryUrl = process.env.CLOUDINARY_URL ?? process.env.VITE_CLOUDINARY_URL
@@ -96,6 +116,17 @@ app.get('/api/media-list', async (req, res) => {
   }
 })
 
+// Serve the built frontend and handle SPA routing in production
+if (existsSync(distDir)) {
+  app.use(express.static(distDir))
+  app.get('*', (_req, res) => {
+    res.sendFile(join(distDir, 'index.html'))
+  })
+}
+
 app.listen(serverPort, () => {
-  console.log(`Media list server running on http://localhost:${serverPort}`)
+  console.log(`Media list server running on port ${serverPort}`)
+  if (existsSync(distDir)) {
+    console.log(`Serving static frontend from ${distDir}`)
+  }
 })
