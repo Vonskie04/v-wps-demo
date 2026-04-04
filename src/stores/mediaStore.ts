@@ -76,7 +76,7 @@ const uploadedMedia = ref<UploadedMedia[]>(loadFromStorage())
 
 export function useMediaStore() {
   async function syncUploadedMediaWithCloudinary() {
-    const response = await fetch(MEDIA_LIST_ENDPOINT)
+    const response = await fetch(MEDIA_LIST_ENDPOINT, { cache: 'no-store' })
 
     if (!response.ok) {
       throw new Error('Failed to retrieve media list from server.')
@@ -86,13 +86,8 @@ export function useMediaStore() {
     const mediaItems = Array.isArray(payload.media) ? payload.media : []
     const validItems = mediaItems.filter(isMediaListApiItem)
 
-    // Only replace state when the server returns at least one item.
-    // An empty result may indicate a temporary misconfiguration or a
-    // race condition right after upload, not that Cloudinary is empty.
-    if (validItems.length > 0) {
-      uploadedMedia.value = validItems
-      saveToStorage(uploadedMedia.value)
-    }
+    uploadedMedia.value = validItems
+    saveToStorage(uploadedMedia.value)
 
     return uploadedMedia.value.length
   }

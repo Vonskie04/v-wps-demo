@@ -85,7 +85,7 @@ app.get('/api/media-list', async (req, res) => {
       ...videos.resources.map((item) => normalizeMediaItem(item, 'video')),
     ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
 
-    res.json({ media })
+    res.set('Cache-Control', 'no-store').json({ media })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown Cloudinary API error'
 
