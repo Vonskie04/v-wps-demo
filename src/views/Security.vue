@@ -21,7 +21,13 @@
           class="w-full border border-gray-300 rounded-xl px-4 py-2 text-sm text-center tracking-widest outline-none focus:border-[#471417] transition"
         />
         <p v-if="error" class="text-xs text-[#471417]">{{ error }}</p>
-        <button @click="submit" class="btn w-full cursor-pointer">UNLOCK</button>
+        <button
+          @click="submit"
+          :disabled="loading"
+          class="btn w-full cursor-pointer disabled:opacity-50"
+        >
+          {{ loading ? 'CHECKING...' : 'UNLOCK' }}
+        </button>
       </template>
 
       <template v-else>
@@ -48,24 +54,32 @@ const router = useRouter()
 
 const tokenInput = ref('')
 const error = ref('')
+const loading = ref(false)
 
-const EXPECTED_TOKEN = import.meta.env.VITE_ACCESS_TOKEN as string | undefined
-
-function submit() {
+async function submit() {
   if (!tokenInput.value.trim()) {
     error.value = 'Please enter an access token.'
     return
   }
-  if (!EXPECTED_TOKEN) {
-    error.value = 'No access token configured.'
-    return
-  }
-  if (tokenInput.value === EXPECTED_TOKEN) {
-    error.value = ''
-    makePublic()
-  } else {
-    error.value = 'Incorrect token.'
-    tokenInput.value = ''
+  loading.value = true
+  error.value = ''
+  try {
+    const res = await fetch('/api/unlock', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: tokenInput.value }),
+    })
+    const data = await res.json()
+    if (res.ok) {
+      makePublic(data.sessionToken)
+    } else {
+      error.value = data.error ?? 'Incorrect token.'
+      tokenInput.value = ''
+    }
+  } catch {
+    error.value = 'Could not reach server. Try again.'
+  } finally {
+    loading.value = false
   }
 }
 

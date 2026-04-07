@@ -1,5 +1,6 @@
 import 'dotenv/config'
 import express from 'express'
+import { createHmac } from 'crypto'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 import { existsSync } from 'fs'
@@ -12,6 +13,8 @@ const app = express()
 
 // server/media-list-server.mjs
 const serverPort = Number(process.env.PORT ?? process.env.MEDIA_LIST_PORT ?? 8787)
+
+app.use(express.json())
 
 // Allow cross-origin requests from any device (needed for multi-device access)
 app.use((req, res, next) => {
@@ -76,8 +79,33 @@ if (!validateCloudinaryConfig(cloudinaryConfig)) {
 
 cloudinary.config(cloudinaryConfig)
 
+const ACCESS_TOKEN = process.env.ACCESS_TOKEN
+
+function createSessionToken() {
+  return createHmac('sha256', ACCESS_TOKEN).update('session').digest('hex')
+}
+
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true })
+})
+
+app.post('/api/unlock', (req, res) => {
+  if (!ACCESS_TOKEN) {
+    return res.status(500).json({ error: 'Access token not configured on server.' })
+  }
+  const { token } = req.body ?? {}
+  if (!token || token !== ACCESS_TOKEN) {
+    return res.status(401).json({ error: 'Incorrect token.' })
+  }
+  res.json({ sessionToken: createSessionToken() })
+})
+
+app.get('/api/verify', (req, res) => {
+  if (!ACCESS_TOKEN) {
+    return res.status(500).json({ valid: false })
+  }
+  const { sessionToken } = req.query
+  res.json({ valid: sessionToken === createSessionToken() })
 })
 
 app.get('/api/media-list', async (req, res) => {

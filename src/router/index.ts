@@ -22,11 +22,19 @@ const router = createRouter({
   ],
 })
 
-router.beforeEach((to) => {
-  const { isPublic } = usePublicStore()
-  if (!isPublic.value && to.name !== 'Security') {
-    return { name: 'Security' }
+router.beforeEach(async (to) => {
+  const { verifySession } = usePublicStore()
+
+  if (to.name === 'Security') {
+    // Already unlocked — skip the security page
+    const valid = await verifySession()
+    if (valid) return { name: 'Main' }
+    return
   }
+
+  // Protected route — verify session with server
+  const valid = await verifySession()
+  if (!valid) return { name: 'Security' }
 })
 
 export default router
