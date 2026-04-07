@@ -56,10 +56,10 @@
         VIDEOS
       </button>
 
-      <!-- View toggle — mobile only -->
+      <!-- View toggle — mobile & tablet -->
       <button
         @click="viewMode = viewMode === 'grid' ? 'list' : 'grid'"
-        class="absolute right-0 cursor-pointer rounded-md p-1.5 text-[#471417] transition-colors sm:hidden"
+        class="absolute right-0 cursor-pointer rounded-md p-1.5 text-[#471417] transition-colors lg:hidden"
         :aria-label="viewMode === 'grid' ? 'Switch to list view' : 'Switch to grid view'"
       >
         <!-- Grid icon — shown when in list mode (click to go to grid) -->
@@ -111,7 +111,7 @@
 
     <div
       v-else-if="currentItems.length > 0"
-      class="mt-8 mx-auto grid max-w-5xl gap-4 sm:grid-cols-2 lg:grid-cols-3"
+      class="mt-8 mx-auto grid max-w-5xl gap-4 lg:grid-cols-3"
       :class="viewMode === 'grid' ? 'grid-cols-2' : 'grid-cols-1'"
     >
       <button
@@ -132,6 +132,7 @@
           <video
             v-else
             :src="item.src"
+            :poster="getVideoPoster(item.src)"
             muted
             playsinline
             class="pointer-events-none h-40 w-full object-cover sm:h-56"
@@ -150,6 +151,7 @@
           <video
             v-else
             :src="item.src"
+            :poster="getVideoPoster(item.src)"
             muted
             playsinline
             class="pointer-events-none h-40 w-full object-cover sm:h-56"
@@ -339,6 +341,10 @@ function openPreview(item: UploadedMedia) {
 
 function closePreview() {
   selectedMedia.value = null
+}
+
+function getVideoPoster(src: string): string {
+  return src.replace(/\.[^./?#]+(\?.*)?$/, '.jpg')
 }
 
 watch(uploadedMedia, (items) => {
