@@ -71,7 +71,7 @@ async function submit() {
     })
     const data = await res.json()
     if (res.ok) {
-      makePublic(data.sessionToken)
+      makePublic(data.sessionToken, data.expiresAt ?? null)
     } else {
       error.value = data.error ?? 'Incorrect token.'
       tokenInput.value = ''

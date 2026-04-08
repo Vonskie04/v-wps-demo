@@ -1,6 +1,6 @@
 import 'dotenv/config'
 import express from 'express'
-import { createHmac } from 'crypto'
+import { createHmac, randomBytes } from 'crypto'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 import { existsSync } from 'fs'
@@ -19,7 +19,7 @@ app.use(express.json())
 // Allow cross-origin requests from any device (needed for multi-device access)
 app.use((req, res, next) => {
   res.set('Access-Control-Allow-Origin', '*')
-  res.set('Access-Control-Allow-Methods', 'GET, OPTIONS')
+  res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
   res.set('Access-Control-Allow-Headers', 'Content-Type')
   if (req.method === 'OPTIONS') {
     res.sendStatus(204)
@@ -80,32 +80,103 @@ if (!validateCloudinaryConfig(cloudinaryConfig)) {
 cloudinary.config(cloudinaryConfig)
 
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN
+const MASTER_KEY = process.env.MASTER_KEY
+
+// In-memory issued-token store: token -> expiry timestamp (ms)
+const issuedTokens = new Map()
+const TOKEN_TTL_MS = 30 * 60 * 1000 // 30 minutes
+
+function pruneExpired() {
+  const now = Date.now()
+  for (const [t, exp] of issuedTokens) {
+    if (exp <= now) issuedTokens.delete(t)
+  }
+}
+
+// In-memory active session store: sessionToken -> expiresAt | null (null = no expiry)
+const activeSessions = new Map()
+
+function pruneExpiredSessions() {
+  const now = Date.now()
+  for (const [t, exp] of activeSessions) {
+    if (exp !== null && exp <= now) activeSessions.delete(t)
+  }
+}
+
+setInterval(pruneExpiredSessions, 5 * 60 * 1000)
 
 function createSessionToken() {
-  return createHmac('sha256', ACCESS_TOKEN).update('session').digest('hex')
+  return randomBytes(32).toString('hex')
 }
 
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true })
 })
 
-app.post('/api/unlock', (req, res) => {
-  if (!ACCESS_TOKEN) {
-    return res.status(500).json({ error: 'Access token not configured on server.' })
+app.post('/api/issue-token', (req, res) => {
+  if (!MASTER_KEY) {
+    return res.status(500).json({ error: 'Token issuance not configured on server.' })
   }
+  const { token, masterKey, ttlMinutes } = req.body ?? {}
+  if (!masterKey || masterKey !== MASTER_KEY) {
+    return res.status(401).json({ error: 'Unauthorized.' })
+  }
+  if (!token || typeof token !== 'string' || token.length < 8) {
+    return res.status(400).json({ error: 'Invalid token.' })
+  }
+  const ttl = Number.isFinite(Number(ttlMinutes))
+    ? Math.min(Math.max(Math.trunc(Number(ttlMinutes)), 1), 2880) * 60 * 1000
+    : TOKEN_TTL_MS
+  pruneExpired()
+  const expiresAt = Date.now() + ttl
+  issuedTokens.set(token, expiresAt)
+  res.json({ ok: true, expiresAt })
+})
+
+app.post('/api/unlock', (req, res) => {
   const { token } = req.body ?? {}
-  if (!token || token !== ACCESS_TOKEN) {
+  if (!token) {
     return res.status(401).json({ error: 'Incorrect token.' })
   }
-  res.json({ sessionToken: createSessionToken() })
+  // Legacy: static ACCESS_TOKEN from env — use default TTL
+  if (ACCESS_TOKEN && token === ACCESS_TOKEN) {
+    const sessionToken = createSessionToken()
+    const expiresAt = Date.now() + TOKEN_TTL_MS
+    activeSessions.set(sessionToken, expiresAt)
+    return res.json({ sessionToken, expiresAt })
+  }
+  // Issued token with TTL
+  pruneExpired()
+  const expiresAt = issuedTokens.get(token)
+  if (!expiresAt) {
+    return res.status(401).json({ error: 'Incorrect token.' })
+  }
+  if (expiresAt <= Date.now()) {
+    issuedTokens.delete(token)
+    return res.status(401).json({ error: 'Token has expired.' })
+  }
+  // Consume the token — single-use only
+  issuedTokens.delete(token)
+  const sessionToken = createSessionToken()
+  activeSessions.set(sessionToken, expiresAt)
+  res.json({ sessionToken, expiresAt })
 })
 
 app.get('/api/verify', (req, res) => {
-  if (!ACCESS_TOKEN) {
-    return res.status(500).json({ valid: false })
-  }
   const { sessionToken } = req.query
-  res.json({ valid: sessionToken === createSessionToken() })
+  if (!sessionToken || typeof sessionToken !== 'string') {
+    return res.json({ valid: false })
+  }
+  pruneExpiredSessions()
+  if (!activeSessions.has(sessionToken)) {
+    return res.json({ valid: false })
+  }
+  const expiresAt = activeSessions.get(sessionToken)
+  if (expiresAt === null || expiresAt <= Date.now()) {
+    activeSessions.delete(sessionToken)
+    return res.json({ valid: false, expired: true })
+  }
+  res.json({ valid: true })
 })
 
 app.get('/api/media-list', async (req, res) => {
