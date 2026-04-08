@@ -20,6 +20,7 @@
           @keyup.enter="submit"
           class="w-full border border-gray-300 rounded-xl px-4 py-2 text-sm text-center tracking-widest outline-none focus:border-[#471417] transition"
         />
+
         <p v-if="error" class="text-xs text-[#471417]">{{ error }}</p>
         <button
           @click="submit"
@@ -40,6 +41,9 @@
           MAKE PRIVATE AGAIN
         </button>
       </template>
+    </div>
+    <div class="absolute bottom-0 mb-10 container flex flex-col items-center gap-2">
+      <p class="text-[10px] text-gray-400 tracking-widest">DEMO VERSION</p>
     </div>
   </div>
 </template>

@@ -82,14 +82,14 @@ cloudinary.config(cloudinaryConfig)
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN
 const MASTER_KEY = process.env.MASTER_KEY
 
-// In-memory issued-token store: token -> expiry timestamp (ms)
+// In-memory issued-token store: token -> { expiresAt, paused }
 const issuedTokens = new Map()
 const TOKEN_TTL_MS = 30 * 60 * 1000 // 30 minutes
 
 function pruneExpired() {
   const now = Date.now()
-  for (const [t, exp] of issuedTokens) {
-    if (exp <= now) issuedTokens.delete(t)
+  for (const [t, info] of issuedTokens) {
+    if (!info.paused && info.expiresAt <= now) issuedTokens.delete(t)
   }
 }
 
@@ -129,8 +129,36 @@ app.post('/api/issue-token', (req, res) => {
     : TOKEN_TTL_MS
   pruneExpired()
   const expiresAt = Date.now() + ttl
-  issuedTokens.set(token, expiresAt)
+  issuedTokens.set(token, { expiresAt, paused: false })
   res.json({ ok: true, expiresAt })
+})
+
+app.post('/api/pause-token', (req, res) => {
+  if (!MASTER_KEY) {
+    return res.status(500).json({ error: 'Not configured.' })
+  }
+  const { token, masterKey, paused } = req.body ?? {}
+  if (!masterKey || masterKey !== MASTER_KEY) {
+    return res.status(401).json({ error: 'Unauthorized.' })
+  }
+  if (!token || typeof token !== 'string') {
+    return res.status(400).json({ error: 'Invalid token.' })
+  }
+  const info = issuedTokens.get(token)
+  if (!info) {
+    return res.status(404).json({ error: 'Token not found.' })
+  }
+  if (paused && !info.paused) {
+    // Pause: store remaining ms instead of absolute expiry
+    info.remainingMs = info.expiresAt - Date.now()
+    info.paused = true
+  } else if (!paused && info.paused) {
+    // Resume: recalculate expiresAt from remaining ms
+    info.expiresAt = Date.now() + (info.remainingMs ?? 0)
+    delete info.remainingMs
+    info.paused = false
+  }
+  res.json({ ok: true })
 })
 
 app.post('/api/unlock', (req, res) => {
@@ -147,19 +175,20 @@ app.post('/api/unlock', (req, res) => {
   }
   // Issued token with TTL
   pruneExpired()
-  const expiresAt = issuedTokens.get(token)
-  if (!expiresAt) {
+  const info = issuedTokens.get(token)
+  if (!info) {
     return res.status(401).json({ error: 'Incorrect token.' })
   }
-  if (expiresAt <= Date.now()) {
+  if (info.paused) {
+    return res.status(403).json({ error: 'Token is paused.' })
+  }
+  if (info.expiresAt <= Date.now()) {
     issuedTokens.delete(token)
     return res.status(401).json({ error: 'Token has expired.' })
   }
-  // Consume the token — single-use only
-  issuedTokens.delete(token)
   const sessionToken = createSessionToken()
-  activeSessions.set(sessionToken, expiresAt)
-  res.json({ sessionToken, expiresAt })
+  activeSessions.set(sessionToken, info.expiresAt)
+  res.json({ sessionToken, expiresAt: info.expiresAt })
 })
 
 app.get('/api/verify', (req, res) => {
