@@ -42,7 +42,7 @@
         </button>
       </template>
     </div>
-    <div class="absolute bottom-0 mb-10 container flex flex-col items-center gap-2">
+    <div class="absolute bottom-0 mb-10container flex flex-col items-center gap-2">
       <p class="text-[10px] text-gray-400 tracking-widest">DEMO VERSION</p>
     </div>
   </div>
