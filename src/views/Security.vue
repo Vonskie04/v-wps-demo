@@ -18,7 +18,7 @@
           type="password"
           placeholder="Access token"
           @keyup.enter="submit"
-          @input="if (!tokenInput) error = ''"
+          @input="onInput"
           class="w-full border border-gray-300 rounded-xl px-4 py-2 text-sm text-center tracking-widest outline-none focus:border-[#471417] transition"
         />
 
@@ -61,13 +61,33 @@ const tokenInput = ref('')
 const error = ref('')
 const loading = ref(false)
 
+let errorTimer: ReturnType<typeof setTimeout> | null = null
+
+function onInput() {
+  if (!tokenInput.value) clearError()
+}
+
+function clearError() {
+  if (errorTimer) {
+    clearTimeout(errorTimer)
+    errorTimer = null
+  }
+  error.value = ''
+}
+
+function setError(msg: string) {
+  clearError()
+  error.value = msg
+  if (msg) errorTimer = setTimeout(clearError, 5000)
+}
+
 async function submit() {
   if (!tokenInput.value.trim()) {
-    error.value = 'Please enter an access token.'
+    setError('Please enter an access token.')
     return
   }
   loading.value = true
-  error.value = ''
+  clearError()
   try {
     const res = await fetch('/api/unlock', {
       method: 'POST',
@@ -79,13 +99,17 @@ async function submit() {
       makePublic(data.sessionToken, data.expiresAt ?? null)
     } else {
       const isPaused = res.status === 403
-      error.value = isPaused
-        ? 'This token is currently paused and cannot be used.'
-        : (data.error ?? 'Incorrect token.')
       if (!isPaused) tokenInput.value = ''
+      setTimeout(() => {
+        setError(
+          isPaused
+            ? 'This token is currently paused and cannot be used.'
+            : (data.error ?? 'Incorrect token.'),
+        )
+      }, 300)
     }
   } catch {
-    error.value = 'Could not reach server. Try again.'
+    setError('Could not reach server. Try again.')
   } finally {
     loading.value = false
   }
