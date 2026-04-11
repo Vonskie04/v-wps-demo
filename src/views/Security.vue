@@ -18,6 +18,7 @@
           type="password"
           placeholder="Access token"
           @keyup.enter="submit"
+          @input="if (!tokenInput) error = ''"
           class="w-full border border-gray-300 rounded-xl px-4 py-2 text-sm text-center tracking-widest outline-none focus:border-[#471417] transition"
         />
 
