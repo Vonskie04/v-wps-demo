@@ -77,8 +77,11 @@ async function submit() {
     if (res.ok) {
       makePublic(data.sessionToken, data.expiresAt ?? null)
     } else {
-      error.value = data.error ?? 'Incorrect token.'
-      tokenInput.value = ''
+      const isPaused = res.status === 403
+      error.value = isPaused
+        ? 'This token is currently paused and cannot be used.'
+        : (data.error ?? 'Incorrect token.')
+      if (!isPaused) tokenInput.value = ''
     }
   } catch {
     error.value = 'Could not reach server. Try again.'
