@@ -109,6 +109,71 @@ function createSessionToken() {
   return randomBytes(32).toString('hex')
 }
 
+// ── Redis (token-gen store) persistence ───────────────────────────────────────
+// Set STORE_URL and STORE_TOKEN in .env to point at the token-gen store server.
+// Without these the server works as before (in-memory only, no restart survival).
+const STORE_BASE = process.env.STORE_URL ? process.env.STORE_URL.replace(/\/$/, '') : null
+const STORE_AUTH = process.env.STORE_TOKEN ? `Bearer ${process.env.STORE_TOKEN}` : null
+const STORE_ISSUED_KEY = 'wed_issued_tokens'
+const STORE_SESSIONS_KEY = 'wed_active_sessions'
+
+async function storeGet(key) {
+  if (!STORE_BASE || !STORE_AUTH) return null
+  try {
+    const res = await fetch(`${STORE_BASE}/api/store/${encodeURIComponent(key)}`, {
+      headers: { Authorization: STORE_AUTH },
+    })
+    if (!res.ok) return null
+    return (await res.json()).value ?? null
+  } catch {
+    return null
+  }
+}
+
+async function storeSet(key, value) {
+  if (!STORE_BASE || !STORE_AUTH) return
+  try {
+    await fetch(`${STORE_BASE}/api/store/${encodeURIComponent(key)}`, {
+      method: 'PUT',
+      headers: { Authorization: STORE_AUTH, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ value }),
+    })
+  } catch {
+    /* best-effort */
+  }
+}
+
+function persistIssuedTokens() {
+  const obj = {}
+  for (const [t, info] of issuedTokens) obj[t] = info
+  storeSet(STORE_ISSUED_KEY, obj)
+}
+
+function persistSessions() {
+  const obj = {}
+  for (const [t, exp] of activeSessions) obj[t] = exp
+  storeSet(STORE_SESSIONS_KEY, obj)
+}
+
+async function loadPersistedState() {
+  const [tokens, sessions] = await Promise.all([
+    storeGet(STORE_ISSUED_KEY),
+    storeGet(STORE_SESSIONS_KEY),
+  ])
+  const now = Date.now()
+  if (tokens && typeof tokens === 'object') {
+    for (const [t, info] of Object.entries(tokens)) {
+      if (info.paused || info.expiresAt > now) issuedTokens.set(t, info)
+    }
+  }
+  if (sessions && typeof sessions === 'object') {
+    for (const [t, exp] of Object.entries(sessions)) {
+      if (exp === null || exp > now) activeSessions.set(t, exp)
+    }
+  }
+  if (tokens || sessions) console.log('Restored persisted tokens and sessions from store.')
+}
+
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true })
 })
@@ -130,6 +195,7 @@ app.post('/api/issue-token', (req, res) => {
   pruneExpired()
   const expiresAt = Date.now() + ttl
   issuedTokens.set(token, { expiresAt, paused: false })
+  persistIssuedTokens()
   res.json({ ok: true, expiresAt })
 })
 
@@ -158,6 +224,7 @@ app.post('/api/pause-token', (req, res) => {
     delete info.remainingMs
     info.paused = false
   }
+  persistIssuedTokens()
   res.json({ ok: true })
 })
 
@@ -171,6 +238,7 @@ app.post('/api/unlock', (req, res) => {
     const sessionToken = createSessionToken()
     const expiresAt = Date.now() + TOKEN_TTL_MS
     activeSessions.set(sessionToken, expiresAt)
+    persistSessions()
     return res.json({ sessionToken, expiresAt })
   }
   // Issued token with TTL
@@ -188,21 +256,37 @@ app.post('/api/unlock', (req, res) => {
   }
   const sessionToken = createSessionToken()
   activeSessions.set(sessionToken, info.expiresAt)
+  persistSessions()
   res.json({ sessionToken, expiresAt: info.expiresAt })
 })
 
-app.get('/api/verify', (req, res) => {
+app.get('/api/verify', async (req, res) => {
   const { sessionToken } = req.query
   if (!sessionToken || typeof sessionToken !== 'string') {
     return res.json({ valid: false })
   }
   pruneExpiredSessions()
+  // On a cold start the in-memory Map is empty; try to restore from the store.
+  if (!activeSessions.has(sessionToken)) {
+    const stored = await storeGet(STORE_SESSIONS_KEY)
+    if (
+      stored &&
+      typeof stored === 'object' &&
+      Object.prototype.hasOwnProperty.call(stored, sessionToken)
+    ) {
+      const exp = stored[sessionToken]
+      if (exp === null || exp > Date.now()) {
+        activeSessions.set(sessionToken, exp)
+      }
+    }
+  }
   if (!activeSessions.has(sessionToken)) {
     return res.json({ valid: false })
   }
   const expiresAt = activeSessions.get(sessionToken)
   if (expiresAt === null || expiresAt <= Date.now()) {
     activeSessions.delete(sessionToken)
+    persistSessions()
     return res.json({ valid: false, expired: true })
   }
   res.json({ valid: true })
@@ -252,9 +336,11 @@ if (existsSync(distDir)) {
   })
 }
 
-app.listen(serverPort, () => {
-  console.log(`Media list server running on port ${serverPort}`)
-  if (existsSync(distDir)) {
-    console.log(`Serving static frontend from ${distDir}`)
-  }
+loadPersistedState().then(() => {
+  app.listen(serverPort, () => {
+    console.log(`Media list server running on port ${serverPort}`)
+    if (existsSync(distDir)) {
+      console.log(`Serving static frontend from ${distDir}`)
+    }
+  })
 })
