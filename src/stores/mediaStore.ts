@@ -1,4 +1,5 @@
 import { ref } from 'vue'
+import { usePublicStore } from '@/stores/publicStore'
 
 export type UploadedMediaType = 'image' | 'video'
 
@@ -9,25 +10,8 @@ export interface UploadedMedia {
   src: string
 }
 
-const CLOUDINARY_URL = import.meta.env.VITE_CLOUDINARY_URL as string | undefined
-const CLOUDINARY_CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME as string | undefined
-const CLOUDINARY_UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET as string | undefined
 const MEDIA_LIST_ENDPOINT = '/api/media-list'
-
-function resolveCloudinaryCloudName() {
-  if (CLOUDINARY_URL) {
-    try {
-      const parsed = new URL(CLOUDINARY_URL)
-      if (parsed.protocol === 'cloudinary:' && parsed.hostname) {
-        return parsed.hostname
-      }
-    } catch {
-      // Ignore malformed VITE_CLOUDINARY_URL and fallback to VITE_CLOUDINARY_CLOUD_NAME.
-    }
-  }
-
-  return CLOUDINARY_CLOUD_NAME
-}
+const MEDIA_UPLOAD_ENDPOINT = '/api/media-upload'
 
 interface MediaListApiItem {
   id: string
@@ -53,8 +37,25 @@ function isMediaListApiItem(item: unknown): item is MediaListApiItem {
 const uploadedMedia = ref<UploadedMedia[]>([])
 
 export function useMediaStore() {
+  const { getSessionToken } = usePublicStore()
+
+  function sessionHeaders() {
+    const token = getSessionToken()
+
+    if (!token) {
+      throw new Error('A valid session is required.')
+    }
+
+    return {
+      'X-Session-Token': token,
+    }
+  }
+
   async function syncUploadedMediaWithCloudinary() {
-    const response = await fetch(MEDIA_LIST_ENDPOINT, { cache: 'no-store' })
+    const response = await fetch(MEDIA_LIST_ENDPOINT, {
+      cache: 'no-store',
+      headers: sessionHeaders(),
+    })
 
     if (!response.ok) {
       throw new Error('Failed to retrieve media list from server.')
@@ -73,12 +74,6 @@ export function useMediaStore() {
     files: FileList | File[],
     onProgress?: (current: number, total: number) => void,
   ) {
-    const cloudName = resolveCloudinaryCloudName()
-
-    if (!cloudName || !CLOUDINARY_UPLOAD_PRESET) {
-      throw new Error('Cloudinary environment variables are missing.')
-    }
-
     const fileArray = Array.from(files).filter(
       (f) => f.type.startsWith('image/') || f.type.startsWith('video/'),
     )
@@ -86,16 +81,12 @@ export function useMediaStore() {
     for (const [i, file] of fileArray.entries()) {
       onProgress?.(i + 1, fileArray.length)
 
-      const isImage = file.type.startsWith('image/')
-      const resourceType = isImage ? 'image' : 'video'
-      const uploadUrl = `https://api.cloudinary.com/v1_1/${cloudName}/${resourceType}/upload`
-
       const formData = new FormData()
       formData.append('file', file)
-      formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET)
 
-      const response = await fetch(uploadUrl, {
+      const response = await fetch(MEDIA_UPLOAD_ENDPOINT, {
         method: 'POST',
+        headers: sessionHeaders(),
         body: formData,
       })
 

@@ -60,5 +60,9 @@ export function usePublicStore() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(session))
   }
 
-  return { isPublic, makePublic, makePrivate, verifySession }
+  function getSessionToken() {
+    return sessionToken.value
+  }
+
+  return { isPublic, makePublic, makePrivate, verifySession, getSessionToken }
 }

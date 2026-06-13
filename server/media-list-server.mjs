@@ -2,7 +2,7 @@ import 'dotenv/config'
 import express from 'express'
 import { createHmac, randomBytes } from 'crypto'
 import { fileURLToPath } from 'url'
-import { dirname, join } from 'path'
+import { basename, dirname, parse, join } from 'path'
 import { existsSync } from 'fs'
 import { v2 as cloudinary } from 'cloudinary'
 
@@ -13,6 +13,15 @@ const app = express()
 
 // server/media-list-server.mjs
 const serverPort = Number(process.env.PORT ?? process.env.MEDIA_LIST_PORT ?? 8787)
+const configuredMediaFolder = sanitizeCloudinaryFolder(
+  process.env.CLOUDINARY_MEDIA_FOLDER ?? process.env.MEDIA_FOLDER ?? 'wedding-media',
+)
+const MEDIA_FOLDER = configuredMediaFolder || 'wedding-media'
+const configuredMaxUploadBytes = Number(process.env.MAX_UPLOAD_BYTES ?? 250 * 1024 * 1024)
+const MAX_UPLOAD_BYTES = Number.isFinite(configuredMaxUploadBytes)
+  ? configuredMaxUploadBytes
+  : 250 * 1024 * 1024
+const ALLOWED_MEDIA_TYPES = /^(image|video)\//
 
 app.use(express.json())
 
@@ -20,7 +29,7 @@ app.use(express.json())
 app.use((req, res, next) => {
   res.set('Access-Control-Allow-Origin', '*')
   res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-  res.set('Access-Control-Allow-Headers', 'Content-Type')
+  res.set('Access-Control-Allow-Headers', 'Content-Type, X-Session-Token, Authorization')
   if (req.method === 'OPTIONS') {
     res.sendStatus(204)
     return
@@ -66,6 +75,21 @@ function normalizeMediaItem(resource, type) {
   }
 }
 
+function sanitizeCloudinaryFolder(folder) {
+  return String(folder)
+    .split('/')
+    .map((part) => part.trim().replace(/[^a-zA-Z0-9_-]/g, '-'))
+    .filter(Boolean)
+    .join('/')
+}
+
+function sanitizeOriginalName(name) {
+  const parsed = parse(basename(name || 'upload'))
+  const baseName = parsed.name.replace(/[^a-zA-Z0-9_-]/g, '-').replace(/-+/g, '-')
+
+  return baseName || 'upload'
+}
+
 function validateCloudinaryConfig(config) {
   return Boolean(config.cloud_name && config.api_key && config.api_secret)
 }
@@ -101,6 +125,56 @@ function pruneExpiredSessions() {
   for (const [t, exp] of activeSessions) {
     if (exp !== null && exp <= now) activeSessions.delete(t)
   }
+}
+
+async function restoreSessionIfNeeded(sessionToken) {
+  if (activeSessions.has(sessionToken)) return
+
+  const stored = await storeGet(STORE_SESSIONS_KEY)
+  if (
+    stored &&
+    typeof stored === 'object' &&
+    Object.prototype.hasOwnProperty.call(stored, sessionToken)
+  ) {
+    const expiresAt = stored[sessionToken]
+    if (expiresAt === null || expiresAt > Date.now()) {
+      activeSessions.set(sessionToken, expiresAt)
+    }
+  }
+}
+
+async function isActiveSession(sessionToken) {
+  if (!sessionToken || typeof sessionToken !== 'string') return false
+
+  pruneExpiredSessions()
+  await restoreSessionIfNeeded(sessionToken)
+
+  if (!activeSessions.has(sessionToken)) return false
+
+  const expiresAt = activeSessions.get(sessionToken)
+  if (expiresAt === null || expiresAt > Date.now()) return true
+
+  activeSessions.delete(sessionToken)
+  persistSessions()
+  return false
+}
+
+function getSessionToken(req) {
+  const headerToken = req.get('X-Session-Token')
+  if (headerToken) return headerToken
+
+  const authorization = req.get('Authorization')
+  if (authorization?.startsWith('Bearer ')) return authorization.slice('Bearer '.length).trim()
+
+  return req.query.sessionToken
+}
+
+async function requireSession(req, res) {
+  const sessionToken = getSessionToken(req)
+  if (await isActiveSession(sessionToken)) return true
+
+  res.status(401).json({ error: 'A valid session is required.' })
+  return false
 }
 
 setInterval(pruneExpiredSessions, 5 * 60 * 1000)
@@ -265,34 +339,100 @@ app.get('/api/verify', async (req, res) => {
   if (!sessionToken || typeof sessionToken !== 'string') {
     return res.json({ valid: false })
   }
-  pruneExpiredSessions()
-  // On a cold start the in-memory Map is empty; try to restore from the store.
-  if (!activeSessions.has(sessionToken)) {
-    const stored = await storeGet(STORE_SESSIONS_KEY)
-    if (
-      stored &&
-      typeof stored === 'object' &&
-      Object.prototype.hasOwnProperty.call(stored, sessionToken)
-    ) {
-      const exp = stored[sessionToken]
-      if (exp === null || exp > Date.now()) {
-        activeSessions.set(sessionToken, exp)
-      }
+
+  res.json({ valid: await isActiveSession(sessionToken) })
+})
+
+function headersFromRequest(req) {
+  const headers = new Headers()
+
+  for (const [key, value] of Object.entries(req.headers)) {
+    if (Array.isArray(value)) {
+      for (const item of value) headers.append(key, item)
+    } else if (value !== undefined) {
+      headers.set(key, value)
     }
   }
-  if (!activeSessions.has(sessionToken)) {
-    return res.json({ valid: false })
+
+  return headers
+}
+
+async function parseMultipartRequest(req) {
+  const request = new Request(`http://localhost${req.originalUrl}`, {
+    method: req.method,
+    headers: headersFromRequest(req),
+    body: req,
+    duplex: 'half',
+  })
+
+  return request.formData()
+}
+
+function uploadBufferToCloudinary(buffer, options) {
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(options, (error, result) => {
+      if (error) reject(error)
+      else resolve(result)
+    })
+
+    stream.end(buffer)
+  })
+}
+
+app.post('/api/media-upload', async (req, res) => {
+  if (!(await requireSession(req, res))) return
+
+  const contentType = req.get('Content-Type') ?? ''
+  if (!contentType.toLowerCase().startsWith('multipart/form-data')) {
+    return res.status(415).json({ error: 'Expected multipart/form-data upload.' })
   }
-  const expiresAt = activeSessions.get(sessionToken)
-  if (expiresAt === null || expiresAt <= Date.now()) {
-    activeSessions.delete(sessionToken)
-    persistSessions()
-    return res.json({ valid: false, expired: true })
+
+  try {
+    const form = await parseMultipartRequest(req)
+    const uploadedFile = form.get('file')
+
+    if (!(uploadedFile instanceof File)) {
+      return res.status(400).json({ error: 'Missing file upload.' })
+    }
+
+    if (!ALLOWED_MEDIA_TYPES.test(uploadedFile.type)) {
+      return res.status(400).json({ error: 'Only image and video files are allowed.' })
+    }
+
+    if (uploadedFile.size > MAX_UPLOAD_BYTES) {
+      return res.status(413).json({ error: 'File is too large.' })
+    }
+
+    const resourceType = uploadedFile.type.startsWith('image/') ? 'image' : 'video'
+    const bytes = Buffer.from(await uploadedFile.arrayBuffer())
+    const uploadResult = await uploadBufferToCloudinary(bytes, {
+      resource_type: resourceType,
+      folder: MEDIA_FOLDER,
+      use_filename: true,
+      unique_filename: true,
+      public_id: sanitizeOriginalName(uploadedFile.name),
+      overwrite: false,
+      context: {
+        uploaded_via: 'media-list-server',
+      },
+    })
+
+    res.status(201).json({
+      media: normalizeMediaItem(uploadResult, resourceType),
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown upload error'
+
+    res.status(500).json({
+      error: 'Failed to upload media.',
+      detail: message,
+    })
   }
-  res.json({ valid: true })
 })
 
 app.get('/api/media-list', async (req, res) => {
+  if (!(await requireSession(req, res))) return
+
   const requestedMax = Number(req.query.max ?? 100)
   const maxResults = Number.isFinite(requestedMax)
     ? Math.min(Math.max(Math.trunc(requestedMax), 1), 500)
@@ -303,11 +443,13 @@ app.get('/api/media-list', async (req, res) => {
       cloudinary.api.resources({
         type: 'upload',
         resource_type: 'image',
+        prefix: `${MEDIA_FOLDER}/`,
         max_results: maxResults,
       }),
       cloudinary.api.resources({
         type: 'upload',
         resource_type: 'video',
+        prefix: `${MEDIA_FOLDER}/`,
         max_results: maxResults,
       }),
     ])

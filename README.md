@@ -40,14 +40,24 @@ This now runs both:
 - Vite frontend
 - media-list backend server at `http://localhost:8787`
 
-### Cloudinary Server-Side Media List
+### Cloudinary Server-Side Media
 
-The gallery list is retrieved from a server endpoint (`/api/media-list`) that queries Cloudinary using API credentials.
+Uploads and the gallery list go through the Express server:
+
+- `POST /api/media-upload` uploads images/videos to Cloudinary.
+- `GET /api/media-list` lists only media inside the server-managed Cloudinary folder.
+
+The browser no longer uploads directly to Cloudinary or needs an upload preset.
 
 Required environment variables (server-side):
 
 - `CLOUDINARY_URL` (preferred), or
 - `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`
+
+Optional environment variables:
+
+- `CLOUDINARY_MEDIA_FOLDER` or `MEDIA_FOLDER` sets the Cloudinary folder. Default: `wedding-media`.
+- `MAX_UPLOAD_BYTES` sets the per-file upload limit. Default: `262144000` (250 MB).
 
 Compatibility fallback:
 
