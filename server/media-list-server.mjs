@@ -102,7 +102,7 @@ if (!validateCloudinaryConfig(cloudinaryConfig)) {
 
 cloudinary.config(cloudinaryConfig)
 
-const ACCESS_TOKEN = process.env.ACCESS_TOKEN
+const ACCESS_TOKEN = process.env.ACCESS_TOKEN ?? process.env.MASTER_TOKEN
 const MASTER_KEY = process.env.MASTER_KEY
 
 // In-memory issued-token store: token -> { expiresAt, paused }
@@ -306,7 +306,7 @@ app.post('/api/unlock', (req, res) => {
   if (!token) {
     return res.status(401).json({ error: 'Incorrect token.' })
   }
-  // Legacy: static ACCESS_TOKEN from env — use default TTL
+  // Static ACCESS_TOKEN / MASTER_TOKEN from env — use default TTL
   if (ACCESS_TOKEN && token === ACCESS_TOKEN) {
     const sessionToken = createSessionToken()
     const expiresAt = Date.now() + TOKEN_TTL_MS
