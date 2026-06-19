@@ -5,7 +5,6 @@ import { fileURLToPath } from 'url'
 import { basename, dirname, parse, join } from 'path'
 import { existsSync } from 'fs'
 import { v2 as cloudinary } from 'cloudinary'
-
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const distDir = join(__dirname, '../dist')
 
