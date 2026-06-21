@@ -19,7 +19,13 @@ let handleVisibility: (() => void) | null = null
 
 onMounted(() => {
   const checkSession = async () => {
-    if (router.currentRoute.value.name === 'Security') return
+    if (
+      router.currentRoute.value.name === 'Security' ||
+      router.currentRoute.value.name === 'LiveFeed' ||
+      router.currentRoute.value.name === 'AdminPortal'
+    ) {
+      return
+    }
     const valid = await verifySession()
     if (!valid) {
       router.push({ name: 'Security' })

@@ -58,7 +58,7 @@ Optional environment variables:
 
 - `CLOUDINARY_MEDIA_FOLDER` or `MEDIA_FOLDER` sets the Cloudinary folder. Default: `wedding-media`.
 - `MAX_UPLOAD_BYTES` sets the per-file upload limit. Default: `262144000` (250 MB).
-- `MASTER_TOKEN` sets a static access token that does not need to be generated. It uses the same 30-minute session TTL as `ACCESS_TOKEN`.
+- `MASTER_TOKEN` or `MASTER_KEY` sets a reusable static access token that does not need to be generated and does not expire.
 
 Compatibility fallback:
 

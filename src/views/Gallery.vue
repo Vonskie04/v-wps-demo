@@ -375,7 +375,7 @@ const currentItems = computed(() => {
 }
 
 .sync-status {
-  font-family: var(--font-saira-stencil);
+  font-family: var(--font-cinzel);
   letter-spacing: 0.04em;
 }
 

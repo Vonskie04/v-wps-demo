@@ -1,12 +1,15 @@
-import 'dotenv/config'
 import express from 'express'
 import { createHmac, randomBytes } from 'crypto'
 import { fileURLToPath } from 'url'
 import { basename, dirname, parse, join } from 'path'
-import { existsSync } from 'fs'
+import { existsSync, readFileSync, writeFileSync } from 'fs'
+import { config as loadEnv, parse as parseEnv } from 'dotenv'
 import { v2 as cloudinary } from 'cloudinary'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const distDir = join(__dirname, '../dist')
+const envFile = join(__dirname, '../.env')
+
+loadEnv({ path: envFile })
 
 const app = express()
 
@@ -20,6 +23,10 @@ const configuredMaxUploadBytes = Number(process.env.MAX_UPLOAD_BYTES ?? 250 * 10
 const MAX_UPLOAD_BYTES = Number.isFinite(configuredMaxUploadBytes)
   ? configuredMaxUploadBytes
   : 250 * 1024 * 1024
+const configuredResourceCacheMs = Number(process.env.CLOUDINARY_RESOURCE_CACHE_MS ?? 60_000)
+const CLOUDINARY_RESOURCE_CACHE_MS = Number.isFinite(configuredResourceCacheMs)
+  ? Math.max(Math.trunc(configuredResourceCacheMs), 0)
+  : 60_000
 const ALLOWED_MEDIA_TYPES = /^(image|video)\//
 
 app.use(express.json())
@@ -102,8 +109,43 @@ if (!validateCloudinaryConfig(cloudinaryConfig)) {
 
 cloudinary.config(cloudinaryConfig)
 
-const ACCESS_TOKEN = process.env.ACCESS_TOKEN ?? process.env.MASTER_TOKEN
-const MASTER_KEY = process.env.MASTER_KEY
+function envToken(name) {
+  return process.env[name]?.trim() || ''
+}
+
+function getCloudinaryErrorMessage(error) {
+  if (error instanceof Error && error.message) return error.message
+  if (error && typeof error === 'object') {
+    const cloudinaryError = error.error
+    if (
+      cloudinaryError &&
+      typeof cloudinaryError === 'object' &&
+      typeof cloudinaryError.message === 'string'
+    ) {
+      return cloudinaryError.message
+    }
+  }
+
+  return 'Unknown Cloudinary API error'
+}
+
+const ACCESS_TOKEN = envToken('ACCESS_TOKEN')
+const ADMIN_TOKEN = envToken('ADMIN_TOKEN')
+const MASTER_TOKEN = envToken('MASTER_TOKEN')
+const MASTER_KEY = envToken('MASTER_KEY')
+
+function envFileToken(name) {
+  try {
+    if (!existsSync(envFile)) return envToken(name)
+    return String(parseEnv(readFileSync(envFile))[name] ?? envToken(name)).trim()
+  } catch {
+    return envToken(name)
+  }
+}
+
+function isLiveFeedPurchased() {
+  return envFileToken('PURCHASED').toLowerCase() !== 'false'
+}
 
 // In-memory issued-token store: token -> { expiresAt, paused }
 const issuedTokens = new Map()
@@ -116,13 +158,30 @@ function pruneExpired() {
   }
 }
 
-// In-memory active session store: sessionToken -> expiresAt | null (null = no expiry)
+// In-memory active session store: sessionToken -> { expiresAt, isAdmin }
 const activeSessions = new Map()
+
+function normalizeSessionInfo(info) {
+  if (info === null || typeof info === 'number') {
+    return { expiresAt: info, isAdmin: false }
+  }
+
+  if (info && typeof info === 'object') {
+    return {
+      expiresAt:
+        info.expiresAt === null || typeof info.expiresAt === 'number' ? info.expiresAt : null,
+      isAdmin: Boolean(info.isAdmin),
+    }
+  }
+
+  return { expiresAt: null, isAdmin: false }
+}
 
 function pruneExpiredSessions() {
   const now = Date.now()
-  for (const [t, exp] of activeSessions) {
-    if (exp !== null && exp <= now) activeSessions.delete(t)
+  for (const [t, info] of activeSessions) {
+    const session = normalizeSessionInfo(info)
+    if (session.expiresAt !== null && session.expiresAt <= now) activeSessions.delete(t)
   }
 }
 
@@ -135,14 +194,14 @@ async function restoreSessionIfNeeded(sessionToken) {
     typeof stored === 'object' &&
     Object.prototype.hasOwnProperty.call(stored, sessionToken)
   ) {
-    const expiresAt = stored[sessionToken]
-    if (expiresAt === null || expiresAt > Date.now()) {
-      activeSessions.set(sessionToken, expiresAt)
+    const session = normalizeSessionInfo(stored[sessionToken])
+    if (session.expiresAt === null || session.expiresAt > Date.now()) {
+      activeSessions.set(sessionToken, session)
     }
   }
 }
 
-async function isActiveSession(sessionToken) {
+async function getActiveSession(sessionToken) {
   if (!sessionToken || typeof sessionToken !== 'string') return false
 
   pruneExpiredSessions()
@@ -150,12 +209,16 @@ async function isActiveSession(sessionToken) {
 
   if (!activeSessions.has(sessionToken)) return false
 
-  const expiresAt = activeSessions.get(sessionToken)
-  if (expiresAt === null || expiresAt > Date.now()) return true
+  const session = normalizeSessionInfo(activeSessions.get(sessionToken))
+  if (session.expiresAt === null || session.expiresAt > Date.now()) return session
 
   activeSessions.delete(sessionToken)
   persistSessions()
   return false
+}
+
+async function isActiveSession(sessionToken) {
+  return Boolean(await getActiveSession(sessionToken))
 }
 
 function getSessionToken(req) {
@@ -176,10 +239,29 @@ async function requireSession(req, res) {
   return false
 }
 
+async function requireAdminSession(req, res) {
+  const sessionToken = getSessionToken(req)
+  const session = await getActiveSession(sessionToken)
+  if (session && session.isAdmin) return true
+
+  res.status(401).json({ error: 'A valid admin session is required.' })
+  return false
+}
+
 setInterval(pruneExpiredSessions, 5 * 60 * 1000)
 
 function createSessionToken() {
   return randomBytes(32).toString('hex')
+}
+
+function isMasterUnlockToken(token) {
+  const submittedToken = typeof token === 'string' ? token.trim() : ''
+  return Boolean(submittedToken && submittedToken === MASTER_TOKEN)
+}
+
+function isAdminUnlockToken(token) {
+  const submittedToken = typeof token === 'string' ? token.trim() : ''
+  return Boolean(submittedToken && (submittedToken === ADMIN_TOKEN || submittedToken === MASTER_TOKEN))
 }
 
 // ── Redis (token-gen store) persistence ───────────────────────────────────────
@@ -189,6 +271,8 @@ const STORE_BASE = process.env.STORE_URL ? process.env.STORE_URL.replace(/\/$/, 
 const STORE_AUTH = process.env.STORE_TOKEN ? `Bearer ${process.env.STORE_TOKEN}` : null
 const STORE_ISSUED_KEY = 'wed_issued_tokens'
 const STORE_SESSIONS_KEY = 'wed_active_sessions'
+const STORE_MODERATION_KEY = 'wed_media_moderation'
+const MODERATION_FILE = join(__dirname, '.media-moderation.json')
 
 async function storeGet(key) {
   if (!STORE_BASE || !STORE_AUTH) return null
@@ -224,14 +308,109 @@ function persistIssuedTokens() {
 
 function persistSessions() {
   const obj = {}
-  for (const [t, exp] of activeSessions) obj[t] = exp
+  for (const [t, info] of activeSessions) obj[t] = normalizeSessionInfo(info)
   storeSet(STORE_SESSIONS_KEY, obj)
 }
 
+const mediaModeration = new Map()
+const cloudinaryResourceCache = new Map()
+
+function normalizeModerationInfo(info) {
+  const status =
+    info && typeof info === 'object' && ['pending', 'approved', 'rejected'].includes(info.status)
+      ? info.status
+      : 'approved'
+
+  return {
+    status,
+    updatedAt:
+      info && typeof info === 'object' && typeof info.updatedAt === 'string'
+        ? info.updatedAt
+        : new Date().toISOString(),
+  }
+}
+
+function readLocalModeration() {
+  try {
+    if (!existsSync(MODERATION_FILE)) return null
+    return JSON.parse(readFileSync(MODERATION_FILE, 'utf8'))
+  } catch {
+    return null
+  }
+}
+
+function writeLocalModeration(value) {
+  if (STORE_BASE && STORE_AUTH) return
+  try {
+    writeFileSync(MODERATION_FILE, JSON.stringify(value, null, 2))
+  } catch {
+    /* best-effort */
+  }
+}
+
+function getMediaStatus(id) {
+  return mediaModeration.get(id)?.status ?? 'approved'
+}
+
+function setMediaStatus(id, status) {
+  mediaModeration.set(id, { status, updatedAt: new Date().toISOString() })
+  persistMediaModeration()
+}
+
+function deleteMediaStatus(id) {
+  mediaModeration.delete(id)
+  persistMediaModeration()
+}
+
+function persistMediaModeration() {
+  const obj = {}
+  for (const [id, info] of mediaModeration) obj[id] = normalizeModerationInfo(info)
+  writeLocalModeration(obj)
+  storeSet(STORE_MODERATION_KEY, obj)
+}
+
+function clearCloudinaryResourceCache() {
+  cloudinaryResourceCache.clear()
+}
+
+async function getCloudinaryResources(maxResults) {
+  const cacheKey = String(maxResults)
+  const cached = cloudinaryResourceCache.get(cacheKey)
+  const now = Date.now()
+
+  if (cached && now - cached.updatedAt < CLOUDINARY_RESOURCE_CACHE_MS) {
+    return cached.resources
+  }
+
+  try {
+    const resources = await Promise.all([
+      cloudinary.api.resources({
+        type: 'upload',
+        resource_type: 'image',
+        prefix: `${MEDIA_FOLDER}/`,
+        max_results: maxResults,
+      }),
+      cloudinary.api.resources({
+        type: 'upload',
+        resource_type: 'video',
+        prefix: `${MEDIA_FOLDER}/`,
+        max_results: maxResults,
+      }),
+    ])
+
+    cloudinaryResourceCache.set(cacheKey, { resources, updatedAt: now })
+    return resources
+  } catch (error) {
+    if (cached) return cached.resources
+    throw error
+  }
+}
+
 async function loadPersistedState() {
-  const [tokens, sessions] = await Promise.all([
+  const [tokens, sessions, moderation] = await Promise.all([
     storeGet(STORE_ISSUED_KEY),
     storeGet(STORE_SESSIONS_KEY),
+    STORE_BASE && STORE_AUTH ? storeGet(STORE_MODERATION_KEY) : readLocalModeration(),
   ])
   const now = Date.now()
   if (tokens && typeof tokens === 'object') {
@@ -240,15 +419,25 @@ async function loadPersistedState() {
     }
   }
   if (sessions && typeof sessions === 'object') {
-    for (const [t, exp] of Object.entries(sessions)) {
-      if (exp === null || exp > now) activeSessions.set(t, exp)
+    for (const [t, rawSession] of Object.entries(sessions)) {
+      const session = normalizeSessionInfo(rawSession)
+      if (session.expiresAt === null || session.expiresAt > now) activeSessions.set(t, session)
     }
   }
-  if (tokens || sessions) console.log('Restored persisted tokens and sessions from store.')
+  if (moderation && typeof moderation === 'object') {
+    for (const [id, rawInfo] of Object.entries(moderation)) {
+      mediaModeration.set(id, normalizeModerationInfo(rawInfo))
+    }
+  }
+  if (tokens || sessions || moderation) console.log('Restored persisted tokens, sessions, and moderation state from store.')
 }
 
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true })
+})
+
+app.get('/api/live-feed-access', (_req, res) => {
+  res.set('Cache-Control', 'no-store').json({ purchased: isLiveFeedPurchased() })
 })
 
 app.post('/api/issue-token', (req, res) => {
@@ -256,7 +445,7 @@ app.post('/api/issue-token', (req, res) => {
     return res.status(500).json({ error: 'Token issuance not configured on server.' })
   }
   const { token, masterKey, ttlMinutes } = req.body ?? {}
-  if (!masterKey || masterKey !== MASTER_KEY) {
+  if (!masterKey || String(masterKey).trim() !== MASTER_KEY) {
     return res.status(401).json({ error: 'Unauthorized.' })
   }
   if (!token || typeof token !== 'string' || token.length < 8) {
@@ -277,7 +466,7 @@ app.post('/api/pause-token', (req, res) => {
     return res.status(500).json({ error: 'Not configured.' })
   }
   const { token, masterKey, paused } = req.body ?? {}
-  if (!masterKey || masterKey !== MASTER_KEY) {
+  if (!masterKey || String(masterKey).trim() !== MASTER_KEY) {
     return res.status(401).json({ error: 'Unauthorized.' })
   }
   if (!token || typeof token !== 'string') {
@@ -302,17 +491,23 @@ app.post('/api/pause-token', (req, res) => {
 })
 
 app.post('/api/unlock', (req, res) => {
-  const { token } = req.body ?? {}
+  const token = typeof req.body?.token === 'string' ? req.body.token.trim() : ''
   if (!token) {
     return res.status(401).json({ error: 'Incorrect token.' })
   }
-  // Static ACCESS_TOKEN / MASTER_TOKEN from env — use default TTL
+  if (isMasterUnlockToken(token)) {
+    const sessionToken = createSessionToken()
+    activeSessions.set(sessionToken, { expiresAt: null, isAdmin: true })
+    persistSessions()
+    return res.json({ sessionToken, expiresAt: null, isAdmin: true })
+  }
+  // Static ACCESS_TOKEN from env uses the default TTL.
   if (ACCESS_TOKEN && token === ACCESS_TOKEN) {
     const sessionToken = createSessionToken()
     const expiresAt = Date.now() + TOKEN_TTL_MS
-    activeSessions.set(sessionToken, expiresAt)
+    activeSessions.set(sessionToken, { expiresAt, isAdmin: false })
     persistSessions()
-    return res.json({ sessionToken, expiresAt })
+    return res.json({ sessionToken, expiresAt, isAdmin: false })
   }
   // Issued token with TTL
   pruneExpired()
@@ -328,9 +523,21 @@ app.post('/api/unlock', (req, res) => {
     return res.status(401).json({ error: 'Token has expired.' })
   }
   const sessionToken = createSessionToken()
-  activeSessions.set(sessionToken, info.expiresAt)
+  activeSessions.set(sessionToken, { expiresAt: info.expiresAt, isAdmin: false })
   persistSessions()
-  res.json({ sessionToken, expiresAt: info.expiresAt })
+  res.json({ sessionToken, expiresAt: info.expiresAt, isAdmin: false })
+})
+
+app.post('/api/admin/unlock', (req, res) => {
+  const token = typeof req.body?.token === 'string' ? req.body.token.trim() : ''
+  if (!token || !isAdminUnlockToken(token)) {
+    return res.status(401).json({ error: 'Incorrect admin token.' })
+  }
+
+  const sessionToken = createSessionToken()
+  activeSessions.set(sessionToken, { expiresAt: null, isAdmin: true })
+  persistSessions()
+  res.json({ sessionToken, expiresAt: null, isAdmin: true })
 })
 
 app.get('/api/verify', async (req, res) => {
@@ -340,6 +547,16 @@ app.get('/api/verify', async (req, res) => {
   }
 
   res.json({ valid: await isActiveSession(sessionToken) })
+})
+
+app.get('/api/admin/verify', async (req, res) => {
+  const { sessionToken } = req.query
+  if (!sessionToken || typeof sessionToken !== 'string') {
+    return res.json({ valid: false })
+  }
+
+  const session = await getActiveSession(sessionToken)
+  res.json({ valid: Boolean(session && session.isAdmin) })
 })
 
 function headersFromRequest(req) {
@@ -415,12 +632,14 @@ app.post('/api/media-upload', async (req, res) => {
         uploaded_via: 'media-list-server',
       },
     })
+    setMediaStatus(uploadResult.public_id, 'pending')
+    clearCloudinaryResourceCache()
 
     res.status(201).json({
-      media: normalizeMediaItem(uploadResult, resourceType),
+      media: { ...normalizeMediaItem(uploadResult, resourceType), status: 'pending' },
     })
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown upload error'
+    const message = getCloudinaryErrorMessage(error)
 
     res.status(500).json({
       error: 'Failed to upload media.',
@@ -429,41 +648,127 @@ app.post('/api/media-upload', async (req, res) => {
   }
 })
 
-app.get('/api/media-list', async (req, res) => {
-  if (!(await requireSession(req, res))) return
-
+async function sendMediaList(req, res, options = {}) {
+  const includeModeration = Boolean(options.includeModeration)
+  const includeRejected = Boolean(options.includeRejected)
+  const onlyApproved = Boolean(options.onlyApproved)
   const requestedMax = Number(req.query.max ?? 100)
   const maxResults = Number.isFinite(requestedMax)
     ? Math.min(Math.max(Math.trunc(requestedMax), 1), 500)
     : 100
 
   try {
-    const [images, videos] = await Promise.all([
-      cloudinary.api.resources({
-        type: 'upload',
-        resource_type: 'image',
-        prefix: `${MEDIA_FOLDER}/`,
-        max_results: maxResults,
-      }),
-      cloudinary.api.resources({
-        type: 'upload',
-        resource_type: 'video',
-        prefix: `${MEDIA_FOLDER}/`,
-        max_results: maxResults,
-      }),
-    ])
+    const [images, videos] = await getCloudinaryResources(maxResults)
 
     const media = [
       ...images.resources.map((item) => normalizeMediaItem(item, 'image')),
       ...videos.resources.map((item) => normalizeMediaItem(item, 'video')),
-    ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    ]
+      .map((item) => ({ ...item, status: getMediaStatus(item.id) }))
+      .filter((item) => {
+        if (onlyApproved) return item.status === 'approved'
+        if (!includeRejected) return item.status !== 'rejected'
+        return true
+      })
+      .map((item) => {
+        if (includeModeration) return item
+        const { status: _status, ...publicItem } = item
+        return publicItem
+      })
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
 
     res.set('Cache-Control', 'no-store').json({ media })
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown Cloudinary API error'
+    const message = getCloudinaryErrorMessage(error)
 
     res.status(500).json({
       error: 'Failed to fetch media list from Cloudinary.',
+      detail: message,
+    })
+  }
+}
+
+app.get('/api/media-list', async (req, res) => {
+  if (!(await requireSession(req, res))) return
+  await sendMediaList(req, res, { onlyApproved: true })
+})
+
+app.get('/api/admin/media-list', async (req, res) => {
+  if (!(await requireAdminSession(req, res))) return
+  await sendMediaList(req, res, { includeModeration: true, includeRejected: true })
+})
+
+app.post('/api/admin/media-moderation', async (req, res) => {
+  if (!(await requireAdminSession(req, res))) return
+
+  const id = typeof req.body?.id === 'string' ? req.body.id.trim() : ''
+  const action = typeof req.body?.action === 'string' ? req.body.action.trim() : ''
+
+  if (!id) {
+    return res.status(400).json({ error: 'Media id is required.' })
+  }
+
+  if (action !== 'approve' && action !== 'reject') {
+    return res.status(400).json({ error: 'Action must be approve or reject.' })
+  }
+
+  try {
+    if (action === 'reject') {
+      setMediaStatus(id, 'rejected')
+      return res.json({ ok: true, status: 'rejected' })
+    }
+
+    setMediaStatus(id, 'approved')
+    return res.json({ ok: true, status: 'approved' })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown moderation error'
+
+    res.status(500).json({
+      error: 'Failed to update media moderation status.',
+      detail: message,
+    })
+  }
+})
+
+app.post('/api/admin/media-delete', async (req, res) => {
+  if (!(await requireAdminSession(req, res))) return
+
+  const id = typeof req.body?.id === 'string' ? req.body.id.trim() : ''
+  const type = typeof req.body?.type === 'string' ? req.body.type.trim() : ''
+
+  if (!id) {
+    return res.status(400).json({ error: 'Media id is required.' })
+  }
+
+  if (type !== 'image' && type !== 'video') {
+    return res.status(400).json({ error: 'Media type must be image or video.' })
+  }
+
+  if (getMediaStatus(id) !== 'rejected') {
+    return res.status(409).json({ error: 'Only rejected media can be deleted.' })
+  }
+
+  try {
+    const result = await cloudinary.uploader.destroy(id, {
+      resource_type: type,
+      invalidate: true,
+    })
+
+    if (result.result !== 'ok' && result.result !== 'not found') {
+      return res.status(502).json({
+        error: 'Cloudinary did not delete the media.',
+        detail: result.result,
+      })
+    }
+
+    deleteMediaStatus(id)
+    clearCloudinaryResourceCache()
+    res.json({ ok: true })
+  } catch (error) {
+    const message = getCloudinaryErrorMessage(error)
+
+    res.status(500).json({
+      error: 'Failed to delete media.',
       detail: message,
     })
   }

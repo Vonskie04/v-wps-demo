@@ -19,11 +19,25 @@ const router = createRouter({
       name: 'Security',
       component: () => import('../views/Security.vue'),
     },
+    {
+      path: '/live-feed',
+      name: 'LiveFeed',
+      component: () => import('../views/LiveFeed.vue'),
+    },
+    {
+      path: '/admin',
+      name: 'AdminPortal',
+      component: () => import('../views/AdminPortal.vue'),
+    },
   ],
 })
 
 router.beforeEach(async (to) => {
   const { verifySession } = usePublicStore()
+
+  if (to.name === 'LiveFeed' || to.name === 'AdminPortal') {
+    return
+  }
 
   if (to.name === 'Security') {
     // Already unlocked — skip the security page
