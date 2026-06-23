@@ -53,6 +53,12 @@
       v-else-if="isFullscreen"
       class="relative flex h-dvh max-h-dvh flex-col overflow-hidden bg-black text-white"
     >
+      <img
+        src="@/assets/dv-logo.png"
+        alt="DV logo"
+        class="absolute left-1/2 top-4 z-20 h-14 w-auto -translate-x-1/2 object-contain drop-shadow sm:top-6 sm:h-16"
+      />
+
       <div class="absolute left-4 top-4 z-20 sm:left-6 sm:top-6">
         <p class="text-[10px] tracking-[0.28em] text-white/55">LIVE PRESENTATION</p>
         <h1 class="fg mt-1 text-4xl text-white sm:text-5xl">Victor & Denise</h1>
@@ -155,10 +161,17 @@
 
     <section v-else class="mx-auto max-w-7xl">
       <header
-        class="flex flex-col gap-4 border-b border-[#d8cec7] pb-5 sm:flex-row sm:items-end sm:justify-between"
+        class="relative flex flex-col gap-4 border-b border-[#d8cec7] pb-5 sm:flex-row sm:items-end sm:justify-between"
       >
+        <img
+          src="@/assets/dv-logo.png"
+          alt="DV logo"
+          class="absolute left-1/2 top-0 h-10 w-auto -translate-x-1/2 object-contain sm:h-12"
+        />
         <div>
-          <p class="text-xs tracking-[0.28em] text-[#8f7d75]">ADMIN LIVE FEED</p>
+          <p class="mb-12 flex h-12 items-center text-xs tracking-[0.28em] text-[#8f7d75]">
+            ADMIN LIVE FEED
+          </p>
           <h1 class="fg mt-2 text-5xl sm:text-6xl">Victor & Denise</h1>
         </div>
         <div class="flex items-center gap-3">

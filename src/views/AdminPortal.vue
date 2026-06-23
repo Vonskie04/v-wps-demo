@@ -2,7 +2,7 @@
   <div class="min-h-screen bg-[#f7f4ef] px-4 py-6 text-[#471417] sm:px-6">
     <section
       v-if="!isAdmin"
-      class="mx-auto flex min-h-[calc(100vh-3rem)] max-w-sm flex-col items-center justify-center text-center"
+      class="mx-auto flex min-h-[calc(100vh-7.5rem)] max-w-sm flex-col items-center justify-center text-center"
     >
       <p class="text-xs tracking-[0.28em] text-[#8f7d75]">ADMIN PORTAL</p>
       <h1 class="fg my-5 text-5xl">Victor & Denise</h1>
@@ -28,9 +28,18 @@
     </section>
 
     <section v-else class="mx-auto max-w-7xl">
-      <header class="flex flex-col gap-4 border-b border-[#d8cec7] pb-5 sm:flex-row sm:items-end sm:justify-between">
+      <header
+        class="relative flex flex-col gap-4 border-b border-[#d8cec7] pb-5 sm:flex-row sm:items-end sm:justify-between"
+      >
+        <img
+          src="@/assets/dv-logo.png"
+          alt="DV logo"
+          class="absolute left-1/2 top-0 h-10 w-auto -translate-x-1/2 object-contain sm:h-12"
+        />
         <div>
-          <p class="text-xs tracking-[0.28em] text-[#8f7d75]">ADMIN PORTAL</p>
+          <p class="mb-12 flex h-12 items-center text-xs tracking-[0.28em] text-[#8f7d75]">
+            ADMIN PORTAL
+          </p>
           <h1 class="fg mt-2 text-5xl sm:text-6xl">Media Approval</h1>
         </div>
         <div class="flex flex-wrap items-center gap-3">
@@ -169,9 +178,7 @@
         </article>
       </div>
 
-      <p v-else class="py-16 text-center text-sm text-[#8f7d75]">
-        No {{ activeStatus }} media.
-      </p>
+      <p v-else class="py-16 text-center text-sm text-[#8f7d75]">No {{ activeStatus }} media.</p>
     </section>
 
     <Transition name="fade">
@@ -188,8 +195,19 @@
           aria-label="Close preview"
           @click="selectedMedia = null"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M6 18 18 6M6 6l12 12" />
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            class="h-8 w-8"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="1.5"
+              d="M6 18 18 6M6 6l12 12"
+            />
           </svg>
         </button>
         <div class="relative z-10 w-full max-w-6xl px-4">
@@ -252,7 +270,9 @@ const tabs = computed(() => [
   { status: 'rejected' as const, label: 'REJECTED', count: rejectedCount.value },
 ])
 
-const visibleMedia = computed(() => media.value.filter((item) => item.status === activeStatus.value))
+const visibleMedia = computed(() =>
+  media.value.filter((item) => item.status === activeStatus.value),
+)
 
 function countByStatus(status: ModerationStatus) {
   return media.value.filter((item) => item.status === status).length
@@ -331,7 +351,8 @@ async function loadMedia() {
     const payload = (await res.json()) as { media?: unknown }
     media.value = Array.isArray(payload.media) ? payload.media.filter(isAdminMedia) : []
   } catch {
-    mediaError.value = 'Admin access is active, but media could not be loaded. Check Cloudinary settings and refresh.'
+    mediaError.value =
+      'Admin access is active, but media could not be loaded. Check Cloudinary settings and refresh.'
   } finally {
     isLoading.value = false
     isSyncing.value = false
