@@ -161,7 +161,7 @@
 
     <section v-else class="mx-auto max-w-7xl">
       <header
-        class="relative flex flex-col gap-4 border-b border-[#d8cec7] pb-5 sm:flex-row sm:items-end sm:justify-between"
+        class="relative flex flex-col gap-4 border-b border-[#d8cec7] pb-5 pt-14 sm:flex-row sm:items-end sm:justify-between sm:pt-0"
       >
         <img
           src="@/assets/dv-logo.png"
@@ -169,16 +169,23 @@
           class="absolute left-1/2 top-0 h-10 w-auto -translate-x-1/2 object-contain sm:h-12"
         />
         <div>
-          <p class="mb-12 flex h-12 items-center text-xs tracking-[0.28em] text-[#8f7d75]">
+          <p
+            class="text-center text-[11px] tracking-[0.24em] text-[#8f7d75] sm:mb-12 sm:flex sm:h-12 sm:items-center sm:text-left sm:text-xs sm:tracking-[0.28em]"
+          >
             ADMIN LIVE FEED
           </p>
-          <h1 class="fg mt-2 text-5xl sm:text-6xl">Victor & Denise</h1>
+          <h1 class="fg mt-2 text-center text-5xl sm:text-left sm:text-6xl">Victor & Denise</h1>
         </div>
-        <div class="flex items-center gap-3">
-          <span v-if="isSyncing" class="text-xs tracking-widest text-[#8f7d75]">UPDATING</span>
+        <div class="grid grid-cols-3 gap-2 sm:flex sm:items-center sm:gap-3">
+          <span
+            v-if="isSyncing"
+            class="col-span-3 text-center text-[10px] tracking-widest text-[#8f7d75] sm:col-span-1 sm:text-left sm:text-xs"
+          >
+            UPDATING
+          </span>
           <button
             type="button"
-            class="rounded-md border border-[#471417]/25 px-3 py-2 text-xs tracking-widest transition hover:bg-white"
+            class="min-w-0 rounded-md border border-[#471417]/25 px-2 py-2 text-[10px] tracking-widest transition hover:bg-white sm:px-3 sm:text-xs"
             :disabled="isSyncing"
             @click="syncFeed"
           >
@@ -186,14 +193,14 @@
           </button>
           <button
             type="button"
-            class="rounded-md border border-[#471417]/25 px-3 py-2 text-xs tracking-widest transition hover:bg-white"
+            class="min-w-0 rounded-md border border-[#471417]/25 px-2 py-2 text-[10px] tracking-widest transition hover:bg-white sm:px-3 sm:text-xs"
             @click="toggleFullscreen"
           >
             {{ isFullscreen ? 'EXIT FULLSCREEN' : 'FULLSCREEN' }}
           </button>
           <button
             type="button"
-            class="rounded-md bg-[#471417] px-3 py-2 text-xs tracking-widest text-white transition hover:bg-[#5a1f2a]"
+            class="min-w-0 rounded-md bg-[#471417] px-2 py-2 text-[10px] tracking-widest text-white transition hover:bg-[#5a1f2a] sm:px-3 sm:text-xs"
             @click="closeAdmin"
           >
             LOCK
@@ -205,18 +212,20 @@
         {{ mediaError }}
       </p>
 
-      <div class="grid gap-4 border-b border-[#d8cec7] py-5 sm:grid-cols-3">
-        <div class="rounded-lg bg-white p-4">
-          <p class="text-xs tracking-widest text-[#8f7d75]">TOTAL FILES</p>
-          <p class="mt-2 text-3xl">{{ visibleMedia.length }}</p>
+      <div class="grid grid-cols-3 gap-2 border-b border-[#d8cec7] py-5 sm:gap-4">
+        <div class="min-w-0 rounded-lg bg-white p-3 sm:p-4">
+          <p class="truncate text-[10px] tracking-widest text-[#8f7d75] sm:text-xs">
+            TOTAL FILES
+          </p>
+          <p class="mt-2 text-2xl sm:text-3xl">{{ visibleMedia.length }}</p>
         </div>
-        <div class="rounded-lg bg-white p-4">
-          <p class="text-xs tracking-widest text-[#8f7d75]">PHOTOS</p>
-          <p class="mt-2 text-3xl">{{ photoCount }}</p>
+        <div class="min-w-0 rounded-lg bg-white p-3 sm:p-4">
+          <p class="truncate text-[10px] tracking-widest text-[#8f7d75] sm:text-xs">PHOTOS</p>
+          <p class="mt-2 text-2xl sm:text-3xl">{{ photoCount }}</p>
         </div>
-        <div class="rounded-lg bg-white p-4">
-          <p class="text-xs tracking-widest text-[#8f7d75]">VIDEOS</p>
-          <p class="mt-2 text-3xl">{{ videoCount }}</p>
+        <div class="min-w-0 rounded-lg bg-white p-3 sm:p-4">
+          <p class="truncate text-[10px] tracking-widest text-[#8f7d75] sm:text-xs">VIDEOS</p>
+          <p class="mt-2 text-2xl sm:text-3xl">{{ videoCount }}</p>
         </div>
       </div>
 
