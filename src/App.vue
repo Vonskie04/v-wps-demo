@@ -22,7 +22,8 @@ onMounted(() => {
     if (
       router.currentRoute.value.name === 'Security' ||
       router.currentRoute.value.name === 'LiveFeed' ||
-      router.currentRoute.value.name === 'AdminPortal'
+      router.currentRoute.value.name === 'AdminPortal' ||
+      router.currentRoute.value.name === 'NotFound'
     ) {
       return
     }

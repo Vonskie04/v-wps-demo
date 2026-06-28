@@ -29,13 +29,18 @@ const router = createRouter({
       name: 'AdminPortal',
       component: () => import('../views/AdminPortal.vue'),
     },
+    {
+      path: '/:pathMatch(.*)*',
+      name: 'NotFound',
+      component: () => import('../views/NotFound.vue'),
+    },
   ],
 })
 
 router.beforeEach(async (to) => {
   const { verifySession } = usePublicStore()
 
-  if (to.name === 'LiveFeed' || to.name === 'AdminPortal') {
+  if (to.name === 'LiveFeed' || to.name === 'AdminPortal' || to.name === 'NotFound') {
     return
   }
 
