@@ -1,8 +1,7 @@
 <template>
   <div class="px-4 py-10">
-    <div class="relative flex flex-col items-center justify-center text-center pt-12 sm:pt-0">
-      <!-- Sync status bar -->
-      <div class="absolute left-0 top-0 sm:top-2 flex items-center gap-2 h-8 px-1">
+    <div class="relative flex flex-col items-center justify-center pt-12 text-center sm:pt-0">
+      <div class="absolute left-0 top-0 flex h-8 items-center gap-2 px-1 sm:top-2">
         <template v-if="!isLoading && isSyncing">
           <span class="inline-block h-2 w-2 animate-pulse rounded-full bg-[#471417]"></span>
           <span class="sync-status text-xs text-gray-400">Updating...</span>
@@ -14,11 +13,10 @@
         </Transition>
       </div>
 
-      <!-- Back button -->
       <button
         type="button"
         @click="goToMain"
-        class="absolute right-4 top-0 sm:top-2 flex cursor-pointer items-center gap-2 rounded-full px-3 py-2 text-gray-700 transition-colors hover:bg-gray-100 active:bg-gray-200"
+        class="absolute right-4 top-0 flex cursor-pointer items-center gap-2 rounded-full px-3 py-2 text-gray-700 transition-colors hover:bg-gray-100 active:bg-gray-200 sm:top-2"
         aria-label="Go back"
       >
         <svg
@@ -36,125 +34,164 @@
 
       <h1 class="mb-10 text-xl sm:text-3xl">THE GALLERY OF</h1>
       <h1 class="fg text-4xl sm:text-5xl lg:text-6xl">
-        Victor <span class="fg text-4xl sm:text-5xl lg:text-6xl mx-2 sm:mx-5">&</span> Denise
+        Victor <span class="fg mx-2 text-4xl sm:mx-5 sm:text-5xl lg:text-6xl">&</span> Denise
       </h1>
     </div>
 
-    <div class="mt-8 relative flex items-center justify-center gap-10">
-      <button
-        @click="activeTab = 'photos'"
-        class="cursor-pointer p-2 fc"
-        :class="activeTab === 'photos' ? 'border-b-2 border-[#471417]' : 'opacity-70'"
-      >
-        PHOTOS
-      </button>
-      <button
-        @click="activeTab = 'videos'"
-        class="cursor-pointer p-2 fc"
-        :class="activeTab === 'videos' ? 'border-b-2 border-[#471417]' : 'opacity-70'"
-      >
-        VIDEOS
-      </button>
+    <div class="mt-8 flex flex-wrap items-center justify-center gap-3 sm:gap-6">
+      <div class="flex items-center justify-center gap-8 sm:gap-10">
+        <button
+          type="button"
+          @click="activeTab = 'photos'"
+          class="fc cursor-pointer p-2"
+          :class="activeTab === 'photos' ? 'border-b-2 border-[#471417]' : 'opacity-70'"
+        >
+          PHOTOS
+        </button>
+        <button
+          type="button"
+          @click="activeTab = 'videos'"
+          class="fc cursor-pointer p-2"
+          :class="activeTab === 'videos' ? 'border-b-2 border-[#471417]' : 'opacity-70'"
+        >
+          VIDEOS
+        </button>
+      </div>
 
-      <!-- View toggle — mobile & tablet -->
-      <button
-        @click="viewMode = viewMode === 'grid' ? 'list' : 'grid'"
-        class="absolute right-0 cursor-pointer rounded-md p-1.5 text-[#471417] transition-colors lg:hidden"
-        :aria-label="viewMode === 'grid' ? 'Switch to list view' : 'Switch to grid view'"
-      >
-        <!-- Grid icon — shown when in list mode (click to go to grid) -->
-        <svg
-          v-if="viewMode === 'list'"
-          xmlns="http://www.w3.org/2000/svg"
-          class="h-5 w-5"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-          stroke-width="2"
+      <div class="flex items-centerbg-white/80 p-0.5" role="group" aria-label="Gallery view">
+        <button
+          type="button"
+          class="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full transition-colors sm:h-8 sm:w-8"
+          :class="
+            viewMode === 'grid' ? 'bg-[#471417] text-white' : 'text-[#471417] hover:bg-[#471417]/10'
+          "
+          :aria-pressed="viewMode === 'grid'"
+          aria-label="Show gallery as grid"
+          title="Grid view"
+          @click="viewMode = 'grid'"
         >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"
-          />
-        </svg>
-        <!-- List icon — shown when in grid mode (click to go to list) -->
-        <svg
-          v-else
-          xmlns="http://www.w3.org/2000/svg"
-          class="h-5 w-5"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-          stroke-width="2"
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            class="h-4 w-4"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            stroke-width="1.8"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M4 6a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6ZM13 6a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2h-3a2 2 0 0 1-2-2V6ZM4 15a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-3ZM13 15a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2h-3a2 2 0 0 1-2-2v-3Z"
+            />
+          </svg>
+        </button>
+
+        <button
+          type="button"
+          class="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full transition-colors sm:h-8 sm:w-8"
+          :class="
+            viewMode === 'list' ? 'bg-[#471417] text-white' : 'text-[#471417] hover:bg-[#471417]/10'
+          "
+          :aria-pressed="viewMode === 'list'"
+          aria-label="Show gallery as list"
+          title="List view"
+          @click="viewMode = 'list'"
         >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            d="M4 6h16M4 10h16M4 14h16M4 18h16"
-          />
-        </svg>
-      </button>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            class="h-4 w-4"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            stroke-width="1.8"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"
+            />
+          </svg>
+        </button>
+      </div>
     </div>
 
-    <!-- Skeleton loading grid -->
     <div
-      v-if="isLoading"
-      class="mt-8 mx-auto grid max-w-5xl gap-4 grid-cols-2 sm:grid-cols-2 lg:grid-cols-3"
+      v-if="isLoading && viewMode === 'grid'"
+      class="mx-auto mt-8 grid max-w-5xl grid-cols-2 gap-4 sm:grid-cols-2 lg:grid-cols-3"
     >
       <div
         v-for="n in 6"
         :key="n"
-        class="skeleton-card overflow-hidden rounded-xl bg-gray-200 h-40 sm:h-56"
+        class="skeleton-card h-40 overflow-hidden rounded-lg bg-gray-200 sm:h-56"
       />
+    </div>
+
+    <div v-else-if="isLoading" class="mx-auto mt-8 flex max-w-3xl flex-col gap-3">
+      <div v-for="n in 6" :key="n" class="skeleton-card h-24 rounded-lg bg-gray-200 sm:h-28" />
     </div>
 
     <div
       v-else-if="currentItems.length > 0"
-      class="mt-8 mx-auto grid max-w-5xl gap-4 lg:grid-cols-3"
-      :class="viewMode === 'grid' ? 'grid-cols-2' : 'grid-cols-1'"
+      class="mx-auto mt-8"
+      :class="
+        viewMode === 'grid'
+          ? 'grid max-w-5xl grid-cols-2 gap-4 sm:grid-cols-2 lg:grid-cols-3'
+          : 'flex max-w-3xl flex-col gap-3'
+      "
     >
       <button
         v-for="item in currentItems"
         :key="item.id"
         type="button"
         @click="openPreview(item)"
-        class="cursor-pointer overflow-hidden rounded-xl bg-gray-100 text-left shadow-sm transition-all duration-300 hover:shadow-md hover:brightness-80 active:brightness-60"
+        class="group cursor-pointer overflow-hidden rounded-lg bg-gray-100 text-left shadow-sm transition-all duration-300 hover:shadow-md hover:brightness-90 active:brightness-75"
       >
-        <!-- Grid layout -->
         <template v-if="viewMode === 'grid'">
-          <img
-            v-if="item.type === 'image'"
-            :src="item.src"
-            :alt="item.name"
-            class="h-40 w-full object-cover sm:h-56"
-          />
+          <div v-if="item.type === 'image'" class="relative h-40 w-full bg-gray-200 sm:h-56">
+            <img
+              :src="item.src"
+              :alt="item.name"
+              class="absolute inset-0 h-full w-full object-cover transition-all duration-500 ease-out group-hover:scale-90 group-hover:opacity-0"
+            />
+            <img
+              :src="item.src"
+              alt=""
+              aria-hidden="true"
+              class="absolute inset-0 h-full w-full scale-110 object-contain opacity-0 transition-all duration-500 ease-out group-hover:scale-100 group-hover:opacity-100"
+            />
+          </div>
           <video
             v-else
             :src="item.src"
             :poster="getVideoPoster(item.src)"
             muted
             playsinline
-            class="pointer-events-none h-40 w-full object-cover sm:h-56"
+            class="pointer-events-none h-40 w-full bg-gray-200 object-cover transition-all duration-300 group-hover:object-contain sm:h-56"
             preload="metadata"
           />
         </template>
 
-        <!-- List layout (mobile) -->
         <template v-else>
-          <img
-            v-if="item.type === 'image'"
-            :src="item.src"
-            :alt="item.name"
-            class="h-40 w-full object-cover sm:h-56"
-          />
+          <div v-if="item.type === 'image'" class="relative h-40 w-full bg-gray-200 sm:h-52">
+            <img
+              :src="item.src"
+              :alt="item.name"
+              class="absolute inset-0 h-full w-full object-cover transition-all duration-500 ease-out group-hover:scale-90 group-hover:opacity-0"
+            />
+            <img
+              :src="item.src"
+              alt=""
+              aria-hidden="true"
+              class="absolute inset-0 h-full w-full scale-110 object-contain opacity-0 transition-all duration-500 ease-out group-hover:scale-100 group-hover:opacity-100"
+            />
+          </div>
           <video
             v-else
             :src="item.src"
             :poster="getVideoPoster(item.src)"
             muted
             playsinline
-            class="pointer-events-none h-40 w-full object-cover sm:h-56"
+            class="pointer-events-none h-40 w-full bg-gray-200 object-cover transition-all duration-300 group-hover:object-contain sm:h-52"
             preload="metadata"
           />
         </template>
@@ -167,7 +204,6 @@
 
     <Transition name="fade">
       <div v-if="selectedMedia" class="fixed inset-0 z-50 flex items-center justify-center">
-        <!-- Blurred dark backdrop -->
         <button
           type="button"
           @click="closePreview"
@@ -175,7 +211,6 @@
           class="absolute inset-0 h-full w-full cursor-default bg-black/80 backdrop-blur-md transition-opacity"
         />
 
-        <!-- Sleek close button top right -->
         <button
           type="button"
           @click="closePreview"
@@ -193,7 +228,6 @@
           </svg>
         </button>
 
-        <!-- Media container with subtle shadow and border -->
         <div @click.stop class="relative z-10 w-full max-w-5xl px-4 sm:px-12">
           <img
             v-if="selectedMedia.type === 'image'"
@@ -264,7 +298,6 @@ function lockBrowserNavigation() {
 }
 
 function handlePopState() {
-  // Keep user on this route when browser back/forward is pressed.
   lockBrowserNavigation()
 }
 
