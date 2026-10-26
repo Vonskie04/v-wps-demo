@@ -23,10 +23,10 @@ const configuredMaxUploadBytes = Number(process.env.MAX_UPLOAD_BYTES ?? 250 * 10
 const MAX_UPLOAD_BYTES = Number.isFinite(configuredMaxUploadBytes)
   ? configuredMaxUploadBytes
   : 250 * 1024 * 1024
-const configuredResourceCacheMs = Number(process.env.CLOUDINARY_RESOURCE_CACHE_MS ?? 60_000)
+const configuredResourceCacheMs = Number(process.env.CLOUDINARY_RESOURCE_CACHE_MS ?? 0)
 const CLOUDINARY_RESOURCE_CACHE_MS = Number.isFinite(configuredResourceCacheMs)
   ? Math.max(Math.trunc(configuredResourceCacheMs), 0)
-  : 60_000
+  : 0
 const ALLOWED_MEDIA_TYPES = /^(image|video)\//
 
 app.use(express.json())
@@ -273,6 +273,7 @@ const STORE_ISSUED_KEY = 'wed_issued_tokens'
 const STORE_SESSIONS_KEY = 'wed_active_sessions'
 const STORE_MODERATION_KEY = 'wed_media_moderation'
 const MODERATION_FILE = join(__dirname, '.media-moderation.json')
+const AUTO_APPROVE_KEY = '__autoApprove'
 
 async function storeGet(key) {
   if (!STORE_BASE || !STORE_AUTH) return null
@@ -314,6 +315,7 @@ function persistSessions() {
 
 const mediaModeration = new Map()
 const cloudinaryResourceCache = new Map()
+let autoApprove = false
 
 function normalizeModerationInfo(info) {
   const status =
@@ -363,7 +365,7 @@ function deleteMediaStatus(id) {
 }
 
 function persistMediaModeration() {
-  const obj = {}
+  const obj = { [AUTO_APPROVE_KEY]: { enabled: autoApprove } }
   for (const [id, info] of mediaModeration) obj[id] = normalizeModerationInfo(info)
   writeLocalModeration(obj)
   storeSet(STORE_MODERATION_KEY, obj)
@@ -426,6 +428,10 @@ async function loadPersistedState() {
   }
   if (moderation && typeof moderation === 'object') {
     for (const [id, rawInfo] of Object.entries(moderation)) {
+      if (id === AUTO_APPROVE_KEY) {
+        autoApprove = rawInfo?.enabled === true
+        continue
+      }
       mediaModeration.set(id, normalizeModerationInfo(rawInfo))
     }
   }
@@ -632,11 +638,12 @@ app.post('/api/media-upload', async (req, res) => {
         uploaded_via: 'media-list-server',
       },
     })
-    setMediaStatus(uploadResult.public_id, 'pending')
+    const status = autoApprove ? 'approved' : 'pending'
+    setMediaStatus(uploadResult.public_id, status)
     clearCloudinaryResourceCache()
 
     res.status(201).json({
-      media: { ...normalizeMediaItem(uploadResult, resourceType), status: 'pending' },
+      media: { ...normalizeMediaItem(uploadResult, resourceType), status },
     })
   } catch (error) {
     const message = getCloudinaryErrorMessage(error)
@@ -677,7 +684,7 @@ async function sendMediaList(req, res, options = {}) {
       })
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
 
-    res.set('Cache-Control', 'no-store').json({ media })
+    res.set('Cache-Control', 'no-store').json({ media, ...(includeModeration ? { autoApprove } : {}) })
   } catch (error) {
     const message = getCloudinaryErrorMessage(error)
 
@@ -696,6 +703,17 @@ app.get('/api/media-list', async (req, res) => {
 app.get('/api/admin/media-list', async (req, res) => {
   if (!(await requireAdminSession(req, res))) return
   await sendMediaList(req, res, { includeModeration: true, includeRejected: true })
+})
+
+app.post('/api/admin/auto-approve', async (req, res) => {
+  if (!(await requireAdminSession(req, res))) return
+  if (typeof req.body?.enabled !== 'boolean') {
+    return res.status(400).json({ error: 'Enabled must be a boolean.' })
+  }
+
+  autoApprove = req.body.enabled
+  persistMediaModeration()
+  res.json({ ok: true, enabled: autoApprove })
 })
 
 app.post('/api/admin/media-moderation', async (req, res) => {

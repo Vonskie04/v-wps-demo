@@ -29,6 +29,10 @@ See [Vite Configuration Reference](https://vite.dev/config/).
 npm install
 ```
 
+Copy `.env.example` to `.env` for a new setup and fill in the server credentials.
+The local `.env` is ignored by Git. Keep credential values in server-only variables;
+Vite exposes variables beginning with `VITE_` to browser builds.
+
 ### Compile and Hot-Reload for Development
 
 ```sh
@@ -38,7 +42,10 @@ npm run dev
 This now runs both:
 
 - Vite frontend
-- media-list backend server at `http://localhost:8787`
+- media-list backend server at `http://localhost:8788` with the provided environment
+
+Vite reads `MEDIA_LIST_PORT` from `.env` for its API proxy. `API_SERVER` can override
+the proxy target. Restart development processes after changing environment settings.
 
 ### Cloudinary Server-Side Media
 
@@ -46,6 +53,9 @@ Uploads and the gallery list go through the Express server:
 
 - `POST /api/media-upload` uploads images/videos to Cloudinary.
 - `GET /api/media-list` lists only media inside the server-managed Cloudinary folder.
+- `POST /api/admin/auto-approve` accepts `{ "enabled": true }` or `{ "enabled": false }`
+  with a valid admin session. The setting persists with moderation state and applies
+  to new uploads. Admin media-list responses include the current `autoApprove` value.
 
 The browser no longer uploads directly to Cloudinary or needs an upload preset.
 
@@ -56,9 +66,16 @@ Required environment variables (server-side):
 
 Optional environment variables:
 
-- `CLOUDINARY_MEDIA_FOLDER` or `MEDIA_FOLDER` sets the Cloudinary folder. Default: `wedding-media`.
+- `CLOUDINARY_MEDIA_FOLDER` or `MEDIA_FOLDER` sets the Cloudinary folder. The provided
+  environment uses `ems-sage`, matching the reference project; the code fallback is `wedding-media`.
+- `CLOUDINARY_RESOURCE_CACHE_MS` sets media-list caching. Default: `0` (disabled).
 - `MAX_UPLOAD_BYTES` sets the per-file upload limit. Default: `262144000` (250 MB).
-- `MASTER_TOKEN` or `MASTER_KEY` sets a reusable static access token that does not need to be generated and does not expire.
+- `ACCESS_TOKEN` grants a guest session for 30 minutes.
+- `ADMIN_TOKEN` grants an admin session through the admin unlock endpoint.
+- `MASTER_TOKEN` grants a reusable admin session without expiration.
+- `MASTER_KEY` authorizes token issuance and pause/resume requests.
+- `PURCHASED=FALSE` disables purchased live-feed access.
+- `STORE_URL` and `STORE_TOKEN` enable remote token, session, and moderation persistence.
 
 Compatibility fallback:
 
